@@ -398,7 +398,6 @@ async def api_memory(request: Request) -> Any:
             # Save settings
             save_memory_settings({
                 "enabled": data.get("enabled"),
-                "history_sync_enabled": data.get("history_sync_enabled"),
                 "short_term_ttl_minutes": data.get("short_term_ttl_minutes"),
                 "short_term_grace_minutes": data.get("short_term_grace_minutes"),
                 "short_term_active_task_hold_minutes": data.get("short_term_active_task_hold_minutes"),
@@ -448,7 +447,6 @@ async def api_memory(request: Request) -> Any:
         "long_term_titles": long_term_titles,
         "short_term_titles": short_term_titles,
         "enabled": settings.get("enabled", True),
-        "history_sync_enabled": settings.get("history_sync_enabled", True),
         "short_term_ttl_minutes": settings.get("short_term_ttl_minutes"),
         "short_term_grace_minutes": settings.get("short_term_grace_minutes"),
         "short_term_active_task_hold_minutes": settings.get("short_term_active_task_hold_minutes"),

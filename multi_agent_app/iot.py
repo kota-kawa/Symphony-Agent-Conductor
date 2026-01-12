@@ -34,8 +34,6 @@ from .errors import IotAgentError
 IOT_DEVICE_CONTEXT_TIMEOUT = float(os.environ.get("IOT_DEVICE_CONTEXT_TIMEOUT", "8.0"))
 IOT_MCP_SSE_TIMEOUT = float(os.environ.get("IOT_MCP_SSE_TIMEOUT", "15.0"))
 IOT_MCP_COMMAND_TIMEOUT = float(os.environ.get("IOT_MCP_COMMAND_TIMEOUT", "45.0"))
-_USE_IOT_AGENT_HISTORY_MCP = os.environ.get("IOT_AGENT_HISTORY_USE_MCP", "1").strip().lower() not in {"0", "false", "no", "off"}
-_IOT_AGENT_MCP_CONVERSATION_TOOL = os.environ.get("IOT_AGENT_MCP_CONVERSATION_TOOL", "analyze_conversation").strip() or "analyze_conversation"
 # Skip MCP for external HTTPS endpoints to avoid SSE connection issues
 _SKIP_MCP_FOR_EXTERNAL = os.environ.get("IOT_SKIP_MCP_FOR_EXTERNAL", "1").strip().lower() not in {"0", "false", "no", "off"}
 
@@ -669,105 +667,6 @@ async def _call_iot_agent_chat(command: str) -> Dict[str, Any]:
     """Backward-compatible alias for `_call_iot_agent_command`."""
 
     return await _call_iot_agent_command(command)
-
-
-async def _call_iot_agent_conversation_review(
-    conversation_history: List[Dict[str, str]]
-) -> Dict[str, Any]:
-    """Send conversation history to the IoT Agent review endpoint."""
-
-    mcp_result: Dict[str, Any] | None = None
-    mcp_errors: list[str] = []
-
-    mcp_result, mcp_errors = await _call_iot_agent_conversation_review_via_mcp(conversation_history)
-    if mcp_result is not None:
-        return mcp_result
-
-    try:
-        return await _post_iot_agent(
-            "/api/conversations/review",
-            {"history": conversation_history},
-        )
-    except IotAgentError as exc:
-        if mcp_errors:
-            message_lines = [str(exc), "MCP 経由での会話同期も失敗しました:"]
-            message_lines.extend(f"- {error}" for error in mcp_errors)
-            raise IotAgentError(
-                "\n".join(message_lines),
-                status_code=getattr(exc, "status_code", 502),
-            ) from exc
-        raise
-
-
-def _parse_iot_history_mcp_result(result: Any) -> Dict[str, Any]:
-    """Extract JSON payload from IoT Agent MCP analyze_conversation."""
-
-    contents = getattr(result, "content", None) or getattr(result, "contents", None) or []
-    for content in contents:
-        text = getattr(content, "text", None)
-        if not isinstance(text, str) or not text.strip():
-            continue
-        try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, dict):
-            return parsed
-
-    raise IotAgentError("IoT Agent MCP analyze_conversation が空の応答を返しました。")
-
-
-async def _call_iot_agent_conversation_review_async(
-    conversation_history: List[Dict[str, str]], base_url: str
-) -> Dict[str, Any]:
-    """Execute the IoT Agent analyze_conversation MCP tool."""
-
-    sse_url = _build_iot_agent_url(base_url, "/mcp/sse")
-    async with sse_client(sse_url, timeout=IOT_AGENT_TIMEOUT) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            tools_result = await session.list_tools()
-            tool_names = [getattr(tool, "name", "") for tool in getattr(tools_result, "tools", None) or []]
-            if _IOT_AGENT_MCP_CONVERSATION_TOOL not in tool_names:
-                raise IotAgentError("IoT Agent に analyze_conversation MCP ツールが見つかりませんでした。")
-
-            result = await session.call_tool(
-                _IOT_AGENT_MCP_CONVERSATION_TOOL,
-                {"conversation_history": conversation_history},
-            )
-            return _parse_iot_history_mcp_result(result)
-
-
-async def _call_iot_agent_conversation_review_via_mcp(
-    conversation_history: List[Dict[str, str]],
-) -> tuple[Dict[str, Any] | None, list[str]]:
-    """Best-effort MCP call for conversation review with fallback to HTTP.
-    
-    For external HTTPS endpoints, skip MCP and return None to trigger HTTP fallback.
-    """
-
-    errors: list[str] = []
-
-    if not _USE_IOT_AGENT_HISTORY_MCP:
-        return None, errors
-
-    bases = _iter_iot_agent_bases()
-    if not bases:
-        return None, ["IoT Agent API の接続先が設定されていません。"]
-
-    for base in bases:
-        if _is_external_endpoint(base) and _SKIP_MCP_FOR_EXTERNAL:
-            logging.debug("Skipping MCP for external endpoint %s in conversation review", base)
-            continue
-
-        try:
-            result = await _call_iot_agent_conversation_review_async(conversation_history, base)
-            return result, errors
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"{base}: {exc}")
-            continue
-
-    return None, errors
 
 
 async def _proxy_iot_agent_request(request: Request, path: str) -> Response:

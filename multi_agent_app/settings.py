@@ -28,7 +28,6 @@ DEFAULT_MODEL_SELECTIONS: Dict[str, Dict[str, str]] = {
 
 DEFAULT_MEMORY_SETTINGS: Dict[str, Any] = {
     "enabled": True,
-    "history_sync_enabled": True,
     "short_term_ttl_minutes": 45,
     "short_term_grace_minutes": 10,
     "short_term_active_task_hold_minutes": 20,
@@ -306,10 +305,6 @@ def _normalize_memory_settings(raw: Dict[str, Any] | None) -> Dict[str, Any]:
     merged: Dict[str, Any] = dict(DEFAULT_MEMORY_SETTINGS)
 
     merged["enabled"] = _coerce_bool(raw.get("enabled") if raw else None, merged["enabled"])
-    merged["history_sync_enabled"] = _coerce_bool(
-        raw.get("history_sync_enabled") if raw else None,
-        merged["history_sync_enabled"],
-    )
     merged["short_term_ttl_minutes"] = _coerce_int(
         raw.get("short_term_ttl_minutes") if raw else None,
         merged["short_term_ttl_minutes"],

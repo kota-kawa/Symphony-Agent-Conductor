@@ -115,12 +115,6 @@ async def _call_lifestyle(path: str, *, method: str = "GET", payload: Dict[str, 
                 question = str(payload.get("question") or "").strip()
             tool_name = "rag_answer"
             tool_args = {"question": question, "persist_history": path != "/agent_rag_answer"}
-        elif path == "/analyze_conversation":
-            history_payload = []
-            if payload:
-                history_payload = payload.get("conversation_history") or payload.get("history") or []
-            tool_name = "analyze_conversation"
-            tool_args = {"conversation_history": history_payload}
 
         if tool_name:
             result, mcp_errors = await _call_lifestyle_tool_via_mcp(bases, tool_name, tool_args)

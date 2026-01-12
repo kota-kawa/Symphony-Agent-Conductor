@@ -6,20 +6,11 @@ import json
 import os
 import logging
 import threading
-import asyncio
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-
-from .browser import _call_browser_agent_chat, _call_browser_agent_history_check
-from .errors import BrowserAgentError, LifestyleAPIError, IotAgentError, SchedulerAgentError
-from .lifestyle import _call_lifestyle
-from .iot import _call_iot_agent_command, _call_iot_agent_conversation_review
-from .scheduler import _call_scheduler_agent_conversation_review
+from typing import Any, Dict, List
 from .settings import load_memory_settings
 from .memory_manager import MemoryManager, get_memory_llm
-from .agent_status import get_agent_availability
 
-_browser_history_supported = True
 _PRIMARY_CHAT_HISTORY_PATH = Path("chat_history.json")
 _FALLBACK_CHAT_HISTORY_PATH = Path("var/chat_history.json")
 _LEGACY_CHAT_HISTORY_PATHS = [Path("instance/chat_history.json")]
@@ -29,15 +20,6 @@ _LEGACY_CHAT_HISTORY_PATHS = [Path("instance/chat_history.json")]
 _SHORT_TO_LONG_THRESHOLD = 3
 _short_updates_since_last_long = 0
 _short_update_lock = threading.Lock()
-
-
-def _run_async_history_sync(history: List[Dict[str, str]]) -> None:
-    """Run async history sync logic in a background thread."""
-
-    try:
-        asyncio.run(_send_recent_history_to_agents(history))
-    except Exception as exc:  # noqa: BLE001
-        logging.warning("Async history sync failed: %s", exc)
 
 
 def _load_chat_history(prefer_fallback: bool = True) -> tuple[List[Dict[str, Any]], Path]:
@@ -147,58 +129,6 @@ def _reset_chat_history() -> None:
     _write_chat_history([], preferred_path=_FALLBACK_CHAT_HISTORY_PATH)
 
 
-def _append_agent_reply(agent_label: str, reply: str) -> None:
-    """Append an agent reply to chat_history without triggering another broadcast."""
-
-    if not reply:
-        return
-
-    safe_label = agent_label.strip() or "Agent"
-    content = f"[{safe_label}] {reply}"
-    _append_to_chat_history(
-        "assistant",
-        content,
-        broadcast=False,
-        metadata={
-            "is_conversation_analysis": True,
-            "analysis_agent": safe_label,
-        },
-    )
-
-
-def _extract_reply(agent_label: str, response: Optional[Dict[str, str]]) -> bool:
-    """Extract reply fields from an agent response and log them to history."""
-
-    if not isinstance(response, dict):
-        return False
-
-    should_reply = response.get("should_reply")
-    reply = response.get("reply") or ""
-    addressed_agents = response.get("addressed_agents")
-
-    reply_is_meaningful = bool(reply.strip())
-    if should_reply is True and reply_is_meaningful:
-        _append_agent_reply(agent_label, reply.strip())
-        return True
-
-    execution_reply = response.get("execution_reply") or ""
-    if isinstance(execution_reply, str) and execution_reply.strip():
-        _append_agent_reply(agent_label, execution_reply.strip())
-        return True
-
-    # Allow agents to opt-in even without explicit flag if they provided text.
-    if reply_is_meaningful:
-        _append_agent_reply(agent_label, reply.strip())
-        return True
-
-    # If the model named another agent but forgot to include text, skip.
-    if isinstance(addressed_agents, list) and addressed_agents:
-        # No free-text to log, so ignore.
-        return False
-
-    return False
-
-
 def _get_memory_llm():
     """Delegate to the shared memory LLM factory."""
 
@@ -281,217 +211,6 @@ def _consolidate_short_into_long(recent_history: List[Dict[str, str]]) -> None:
         logging.warning("Short->Long consolidation failed: %s", exc)
 
 
-async def _handle_agent_responses(
-    responses: Dict[str, Dict[str, Any]],
-    normalized_history: List[Dict[str, str]],
-    had_reply: bool,
-    response_order: List[str],
-) -> None:
-    """Inspect agent responses and decide whether to act or lightly acknowledge."""
-
-    if not responses and not had_reply:
-        return
-
-    action_requests: list[dict[str, Any]] = []
-
-    browser_response = responses.get("Browser")
-    if isinstance(browser_response, dict):
-        needs_action = browser_response.get("needs_action")
-        task_description = browser_response.get("task_description")
-        action_taken = browser_response.get("action_taken")
-        if needs_action and task_description and not action_taken:
-            action_requests.append(
-                {
-                    "agent": "Browser",
-                    "kind": "browser_task",
-                    "description": str(task_description),
-                }
-            )
-
-    iot_response = responses.get("IoT")
-    if isinstance(iot_response, dict):
-        analysis = iot_response.get("analysis") if isinstance(iot_response.get("analysis"), dict) else {}
-        action_required = analysis.get("action_required") if isinstance(analysis, dict) else None
-        if action_required is None:
-            action_required = iot_response.get("action_required")
-        action_taken = bool(iot_response.get("action_taken"))
-
-        suggested_commands = analysis.get("suggested_device_commands") if isinstance(analysis, dict) else None
-        executed_commands = analysis.get("executed_commands") if isinstance(analysis, dict) else None
-        device_commands = suggested_commands or executed_commands or iot_response.get("device_commands") or []
-
-        execution_reply = iot_response.get("execution_reply")
-        if action_taken and isinstance(execution_reply, str) and execution_reply.strip():
-            _append_agent_reply("IoT", execution_reply.strip())
-            had_reply = True
-
-        if action_required and not action_taken and device_commands:
-            commands_summary = "; ".join(
-                f"{cmd.get('name') or cmd.get('device_id')}: {cmd}"
-                for cmd in device_commands
-                if isinstance(cmd, dict)
-            )
-            action_requests.append(
-                {
-                    "agent": "IoT",
-                    "kind": "iot_commands",
-                    "description": commands_summary or "IoTアクションの実行",
-                }
-            )
-
-    life_response = responses.get("Life-Style")
-    if isinstance(life_response, dict):
-        needs_help = life_response.get("needs_help")
-        question = life_response.get("question")
-        if needs_help and isinstance(question, str) and question.strip():
-            action_requests.append(
-                {
-                    "agent": "Life-Style",
-                    "kind": "lifestyle_query",
-                    "description": question.strip(),
-                }
-            )
-
-    scheduler_response = responses.get("Scheduler")
-    if isinstance(scheduler_response, dict):
-        action_taken = scheduler_response.get("action_taken")
-        results = scheduler_response.get("results") if isinstance(scheduler_response.get("results"), list) else []
-        if action_taken and results:
-            summary = "; ".join(str(item) for item in results if item)
-            if summary:
-                _append_agent_reply("Scheduler", f"スケジュールを更新しました: {summary}")
-                had_reply = True
-        # Note: _extract_reply for Scheduler is already called in _send_recent_history_to_agents,
-        # so we skip it here to avoid duplicate writes to chat_history.
-        response_order.append("Scheduler")
-
-    if response_order:
-        # Keep action handling order aligned with agent response order.
-        order_index = {name: idx for idx, name in enumerate(response_order)}
-        action_requests.sort(key=lambda item: order_index.get(item.get("agent"), 999))
-
-    if not action_requests:
-        _append_agent_reply("Orchestrator", "了解です。今のところ追加のアクションは不要です。")
-        return
-
-    availability = await get_agent_availability()
-    for request in action_requests:
-        agent = request.get("agent")
-        kind = request.get("kind")
-        description = request.get("description") or ""
-
-        try:
-            if kind == "browser_task":
-                if not availability.get("browser", True):
-                    continue
-                result = await _call_browser_agent_chat(description)
-                summary = result.get("run_summary") if isinstance(result, dict) else None
-                message = summary or f"ブラウザエージェントに依頼しました: {description}"
-            elif kind == "iot_commands":
-                if not availability.get("iot", True):
-                    continue
-                # Send a concise command to IoT agent chat; IoT agent will interpret.
-                prompt = f"以下のIoTアクションを実行してください: {description}"
-                result = await _call_iot_agent_command(prompt)
-                message = result.get("reply") if isinstance(result, dict) else None
-                if not message:
-                    message = f"IoT Agentに実行を依頼しました: {description}"
-            elif kind == "lifestyle_query":
-                if not availability.get("lifestyle", True):
-                    continue
-                result = await _call_lifestyle(
-                    "/agent_rag_answer",
-                    method="POST",
-                    payload={"question": description},
-                )
-                message = result.get("answer") if isinstance(result, dict) else None
-                if not message:
-                    message = f"Life-Style Agentに問い合わせました: {description}"
-            else:
-                continue
-
-            _append_agent_reply("Orchestrator", message)
-        except (BrowserAgentError, IotAgentError, LifestyleAPIError) as exc:
-            logging.warning("Failed to handle agent action (%s): %s", kind, exc)
-            _append_agent_reply("Orchestrator", f"{agent} への依頼に失敗しました: {exc}")
-        except Exception as exc:  # noqa: BLE001
-            logging.exception("Unexpected error while handling agent action")
-            _append_agent_reply("Orchestrator", f"{agent} への依頼中に予期しないエラーが発生しました: {exc}")
-
-
-async def _send_recent_history_to_agents(history: List[Dict[str, str]]) -> None:
-    """Send the last 5 chat history entries to all agents and capture any replies."""
-
-    recent_history = history[-5:]
-
-    normalized_history: List[Dict[str, str]] = []
-    for entry in recent_history:
-        role = entry.get("role") if isinstance(entry, dict) else None
-        content = entry.get("content") if isinstance(entry, dict) else None
-        if not isinstance(role, str) or not isinstance(content, str):
-            continue
-        normalized_history.append({"role": role, "content": content})
-
-    if not normalized_history:
-        return
-
-    payload = {"history": normalized_history}
-    responses: Dict[str, Dict[str, Any]] = {}
-    response_order: List[str] = []
-    had_reply = False
-
-    availability = await get_agent_availability()
-    if availability.get("lifestyle", True):
-        try:
-            lifestyle_response = await _call_lifestyle(
-                "/analyze_conversation",
-                method="POST",
-                payload=payload,
-            )
-            responses["Life-Style"] = lifestyle_response if isinstance(lifestyle_response, dict) else {}
-            had_reply = _extract_reply("Life-Style", lifestyle_response) or had_reply
-            response_order.append("Life-Style")
-        except LifestyleAPIError as e:
-            logging.warning("Error sending history to Life-Style: %s", e)
-
-    global _browser_history_supported
-    if _browser_history_supported and availability.get("browser", True):
-        try:
-            browser_response = await _call_browser_agent_history_check(normalized_history)
-            responses["Browser"] = browser_response if isinstance(browser_response, dict) else {}
-            had_reply = _extract_reply("Browser", browser_response) or had_reply
-            response_order.append("Browser")
-        except BrowserAgentError as e:
-            if getattr(e, "status_code", None) == 404:
-                _browser_history_supported = False
-                logging.info(
-                    "Browser agent history check endpoint not available. "
-                    "Disabling future history check requests."
-                )
-            else:
-                logging.warning("Error sending history to browser agent: %s", e)
-
-    if availability.get("iot", True):
-        try:
-            iot_response = await _call_iot_agent_conversation_review(normalized_history)
-            responses["IoT"] = iot_response if isinstance(iot_response, dict) else {}
-            had_reply = _extract_reply("IoT", iot_response) or had_reply
-            response_order.append("IoT")
-        except IotAgentError as e:
-            logging.warning("Error sending history to iot agent: %s", e)
-
-    if availability.get("scheduler", True):
-        try:
-            scheduler_response = await _call_scheduler_agent_conversation_review(normalized_history)
-            responses["Scheduler"] = scheduler_response if isinstance(scheduler_response, dict) else {}
-            had_reply = _extract_reply("Scheduler", scheduler_response) or had_reply
-            response_order.append("Scheduler")
-        except SchedulerAgentError as e:
-            logging.warning("Error sending history to scheduler agent: %s", e)
-
-    await _handle_agent_responses(responses, normalized_history, had_reply, response_order)
-
-
 def _append_to_chat_history(
     role: str, content: str, *, broadcast: bool = True, metadata: Optional[Dict[str, Any]] = None
 ) -> None:
@@ -518,12 +237,6 @@ def _append_to_chat_history(
     total_entries = len(history)
     if total_entries == 0:
         return
-
-    # Keep agents loosely in sync
-    if broadcast and total_entries % 5 == 0:
-        memory_settings = load_memory_settings()
-        if memory_settings.get("history_sync_enabled", True):
-            threading.Thread(target=_run_async_history_sync, args=(history,)).start()
 
     # Short-term memory: refresh every turn using the latest few lines as context
     threading.Thread(target=_refresh_memory, args=("short", history[-6:])).start()

@@ -21,7 +21,7 @@
 - `prompt.txt`: Codex CLI automation scratchpad; keep instructions accurate if it’s used for tooling.
 
 ## Runtime Data & Memory Management
-- `_append_to_chat_history` maintains `chat_history.json`, appends every user/assistant turn from the一般（オーケストレーター）ビュー, and asynchronously calls `_send_recent_history_to_agents` every five entries to sync the Life-Assistantエージェント, Browser Agent, and IoT Agent. 送信スキーマは `{"history": [{"role": "...", "content": "..."}]}` に統一し、各エージェントから `should_reply`/`reply`/`addressed_agents` が返ってきた場合は `[Agent] ...` 形式で `chat_history.json` に追記する。Theチャットビュー (`/rag_answer`) now bypasses this file entirely so only orchestrated conversations persist locally.
+- `_append_to_chat_history` maintains `chat_history.json` and appends every user/assistant turn from the一般（オーケストレーター）ビュー. Theチャットビュー (`/rag_answer`) now bypasses this file entirely so only orchestrated conversations persist locally.
 - 短期記憶は会話履歴が10件ごと、長期記憶は30件ごとにLLMで再生成される。直近10/30件の履歴と既存メモを突き合わせ、差分は「以前 -> 更新後」の矢印付きで `short_term_memory.json` / `long_term_memory.json` に保存される。
 - `short_term_memory.json` には `expires_at` が必ず付与され、既定（45分 + グレース期間）を過ぎると自動で初期化される。アクティブタスクがある場合は延命し、期限切れ時にスコア/importance の高いスロットやエピソードは長期記憶へ昇格する。
 - `/chat_history` + `/reset_chat_history` expose the local transcript to the UI; `assets/app.js` also duplicates key steps into sidebar/orchestrator panes.
@@ -58,10 +58,9 @@
 - Browser Agent helpers:
   - `_iter_browser_agent_bases`, `_expand_browser_agent_base`, `_canonicalise_browser_agent_base` clean up host overrides and add alias hostnames.
   - `_execute_browser_task_with_progress` opens both `/api/stream` (event stream) and `/api/chat` (task execution) concurrently, converts them to orchestrator `execution_progress` events, and tracks `[browser-agent-final]` markers plus `BROWSER_AGENT_FINAL_NOTICE`.
-  - `_post_browser_agent` is used for history checks and `chat` API shims outside orchestrator flows.
+  - `_post_browser_agent` is used for `chat` API shims outside orchestrator flows.
 - IoT Agent helpers:
   - `_call_iot_agent_command` executes device actions exclusively via the IoT Agent's MCP server (tool schemas + dynamic device capabilities) without falling back to the legacy HTTP `/api/chat`.
-  - `_call_iot_agent_conversation_review` keeps the JSON shim for `/api/conversations/review`.
   - `_proxy_iot_agent_request` mirrors incoming verbs to `/iot_agent` routes so the SPA can talk to remote IoT APIs without CORS pain.
 - Keep timeout constants near the top of `app.py` in sync with real-world deployments; expose new env toggles for any behavior change.
 
@@ -77,7 +76,7 @@
 ## Testing Guidelines
 - Add `pytest` suites under `tests/` (create it if missing). Mirror module/function names eg. `test_orchestrator.py`, `test_browser_proxy.py`.
 - Mock external HTTP calls (`httpx.AsyncClient`) and LangChain clients in tests; exercise success paths, network failures, timeout fallbacks, and SSE formatting helpers such as `_format_sse_event`.
-- Include regression tests for `_send_recent_history_to_agents`, `_iter_*_bases` normalizers, and orchestrator plan/execution logic when making changes.
+- Include regression tests for `_iter_*_bases` normalizers and orchestrator plan/execution logic when making changes.
 - Run `pytest -q` (or `pytest`) before raising a PR. Document any required external services or env vars for deterministic runs.
 
 ## Commit & Pull Request Guidelines
@@ -89,7 +88,7 @@
 - Add new agent constants and defaults near the other `DEFAULT_*` sections in `app.py`, wire them into `_AGENT_ALIASES`, `_AGENT_DISPLAY_NAMES`, and CLI/env overrides.
 - Update `docker-compose.yml` to surface new agent URLs via environment variables so containerized runs stay reproducible.
 - Extend the SPA mappings (`AGENT_TO_VIEW_MAP`, `GENERAL_PROXY_AGENT_LABELS`, etc.) plus any status text to surface the new agent’s activity.
-- Validate connectivity with `httpx` helpers before exposing routes, log warnings instead of crashing, and avoid blocking the FastAPI event loop—use background threads like `_send_recent_history_to_agents` when broadcasting updates.
+- Validate connectivity with `httpx` helpers before exposing routes, log warnings instead of crashing, and avoid blocking the FastAPI event loop with long-running work.
 - Whenever you change SSE payloads or Browser/IoT bridge contracts, update both backend helpers and `assets/app.js` handlers in the same commit to keep the UI responsive.
 
 ## Critical Instruction / 重要指示

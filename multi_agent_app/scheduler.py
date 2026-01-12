@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import os
 import time
@@ -55,9 +54,6 @@ def _mark_host_up(base_url: str):
 
 _USE_SCHEDULER_AGENT_MCP = os.environ.get("SCHEDULER_AGENT_USE_MCP", "1").strip().lower() not in {"0", "false", "no", "off"}
 _SCHEDULER_AGENT_MCP_TOOL = os.environ.get("SCHEDULER_AGENT_MCP_TOOL", "manage_schedule").strip() or "manage_schedule"
-_SCHEDULER_AGENT_MCP_CONVERSATION_TOOL = (
-    os.environ.get("SCHEDULER_AGENT_MCP_CONVERSATION_TOOL", "analyze_conversation").strip() or "analyze_conversation"
-)
 
 
 def _iter_scheduler_agent_bases() -> list[str]:
@@ -385,99 +381,6 @@ async def _call_scheduler_agent_chat(command: str) -> Dict[str, Any]:
                 status_code=getattr(exc, "status_code", 502),
             ) from exc
         raise
-
-
-async def _call_scheduler_agent_conversation_review(
-    conversation_history: List[Dict[str, str]],
-) -> Dict[str, Any]:
-    """Send recent conversation turns to the Scheduler Agent for analysis."""
-
-    mcp_result: Dict[str, Any] | None = None
-    mcp_errors: list[str] = []
-
-    mcp_result, mcp_errors = await _call_scheduler_agent_conversation_review_via_mcp(conversation_history)
-    if mcp_result is not None:
-        return mcp_result
-
-    try:
-        return await _post_scheduler_agent(
-            "/api/conversations/review",
-            {"history": conversation_history},
-        )
-    except SchedulerAgentError as exc:
-        if mcp_errors:
-            message_lines = [str(exc), "MCP 経由での会話同期も失敗しました:"]
-            message_lines.extend(f"- {error}" for error in mcp_errors)
-            raise SchedulerAgentError(
-                "\n".join(message_lines),
-                status_code=getattr(exc, "status_code", 502),
-            ) from exc
-        raise
-
-
-def _parse_scheduler_history_mcp_result(result: Any) -> Dict[str, Any]:
-    """Extract JSON payload from Scheduler Agent MCP analyze_conversation."""
-
-    contents = getattr(result, "content", None) or getattr(result, "contents", None) or []
-    for content in contents:
-        text = getattr(content, "text", None)
-        if not isinstance(text, str) or not text.strip():
-            continue
-        try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, dict):
-            return parsed
-
-    raise SchedulerAgentError("Scheduler Agent MCP analyze_conversation が空の応答を返しました。")
-
-
-async def _call_scheduler_agent_conversation_review_via_mcp(
-    conversation_history: List[Dict[str, str]],
-) -> tuple[Dict[str, Any] | None, list[str]]:
-    """Best-effort MCP call for conversation review."""
-
-    errors: list[str] = []
-
-    if not _USE_SCHEDULER_AGENT_MCP:
-        return None, errors
-
-    try:
-        from mcp import ClientSession
-        from mcp.client.sse import sse_client
-    except Exception as exc:  # noqa: BLE001
-        return None, [f"MCP クライアントの初期化に失敗しました: {exc}"]
-
-    bases = _iter_scheduler_agent_bases()
-    if not bases:
-        return None, ["Scheduler Agent の接続先が設定されていません。"]
-
-    async def _call_tool(base: str):
-        sse_url = _build_scheduler_agent_url(base, "/mcp/sse")
-        async with sse_client(sse_url, timeout=SCHEDULER_AGENT_TIMEOUT) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                tools_result = await session.list_tools()
-                tool_names = [getattr(tool, "name", "") for tool in getattr(tools_result, "tools", None) or []]
-                if _SCHEDULER_AGENT_MCP_CONVERSATION_TOOL not in tool_names:
-                    raise SchedulerAgentError("MCP ツール analyze_conversation が Scheduler Agent で見つかりませんでした。")
-
-                result = await session.call_tool(
-                    _SCHEDULER_AGENT_MCP_CONVERSATION_TOOL,
-                    {"conversation_history": conversation_history},
-                )
-                return _parse_scheduler_history_mcp_result(result)
-
-    for base in bases:
-        try:
-            result = await asyncio.wait_for(_call_tool(base), timeout=SCHEDULER_AGENT_TIMEOUT)
-            return result, errors
-        except Exception as exc:  # noqa: BLE001
-            errors.append(f"{base}: {exc}")
-            continue
-
-    return None, errors
 
 
 async def _fetch_calendar_data(year: int, month: int) -> Dict[str, Any]:

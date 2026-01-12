@@ -11,7 +11,6 @@ const memoryToggle = $("#settingsMemoryToggle");
 const chatCountValue = $("#chatCountValue");
 const chatCountNote = $("#chatCountNote");
 const statusMessage = $("#settingsStatusMessage");
-const historySyncToggle = $("#settingsHistorySyncToggle");
 
 // Agent toggles
 const agentToggleBrowser = $("#agentToggleBrowser");
@@ -192,7 +191,6 @@ async function fetchMemory() {
     longTermFull: data?.long_term_full ?? {},
     shortTermFull: data?.short_term_full ?? {},
     enabled: data?.enabled ?? true,
-    historySyncEnabled: data?.history_sync_enabled ?? true,
     shortTermTtlMinutes: data?.short_term_ttl_minutes ?? 45,
     shortTermGraceMinutes: data?.short_term_grace_minutes ?? 0,
     shortTermActiveHoldMinutes: data?.short_term_active_task_hold_minutes ?? 0,
@@ -306,10 +304,6 @@ async function loadSettingsData() {
             memoryToggle.checked = m.enabled;
             updateSwitchAria(memoryToggle);
         }
-        if (historySyncToggle) {
-            historySyncToggle.checked = m.historySyncEnabled;
-            updateSwitchAria(historySyncToggle);
-        }
         if (shortTermTtlInput) shortTermTtlInput.value = m.shortTermTtlMinutes ?? "";
         if (shortTermGraceInput) shortTermGraceInput.value = m.shortTermGraceMinutes ?? "";
         if (shortTermActiveHoldInput) shortTermActiveHoldInput.value = m.shortTermActiveHoldMinutes ?? "";
@@ -382,7 +376,6 @@ async function saveMemory() {
     
     const payload = {
         enabled: memoryToggle?.checked ?? true,
-        history_sync_enabled: historySyncToggle?.checked ?? true,
         long_term_memory: state.memoryValues.long,
         short_term_memory: state.memoryValues.short
     };
@@ -701,10 +694,6 @@ export function initSettingsModal() {
   if (memoryToggle) {
     updateSwitchAria(memoryToggle);
     memoryToggle.addEventListener("change", () => updateSwitchAria(memoryToggle));
-  }
-  if (historySyncToggle) {
-    updateSwitchAria(historySyncToggle);
-    historySyncToggle.addEventListener("change", () => updateSwitchAria(historySyncToggle));
   }
   Object.values(agentToggleInputs).forEach(input => {
     if (!input) return;
