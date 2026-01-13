@@ -5,6 +5,8 @@
   <p><strong>あなたのためのAIエージェント・オーケストラ</strong></p>
 </div>
 
+[English](README_en.md)
+
 Symphony Agent Conductor へようこそ！  
 ここは、様々な能力を持ったAIエージェントたち（ブラウザ操作、IoT、スケジュール管理など）を指揮し、あなたの生活やタスクをサポートする司令塔です。
 
