@@ -1,7 +1,7 @@
 {
   "orchestrator": {
     "provider": "groq",
-    "model": "openai/gpt-oss-20b",
+    "model": "qwen/qwen3-32b",
     "base_url": "https://api.groq.com/openai/v1"
   },
   "browser": {
