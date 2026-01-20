@@ -1,7 +1,7 @@
 # 🎵 Symphony Agent Conductor
 
 <div align="center">
-  <img src="assets/icons/Symphony Agent Conductor.png" width="200px">
+  <img src="assets/icons/Symphony Agent Conductor.png" width="800px">
   <p><strong>あなたのためのAIエージェント・オーケストラ</strong></p>
 </div>
 
