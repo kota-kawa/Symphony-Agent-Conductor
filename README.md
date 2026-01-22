@@ -29,11 +29,16 @@ Docker があれば、コマンドひとつでコンサート（システム）�
 ### 1. 準備 🔑
 
 まずは、AIの頭脳となる APIキーを設定ファイルに書き込みます。
-プロジェクトのフォルダに `secrets.env` という名前のファイルを作り、以下の内容を書いて保存してください。
+プロジェクトのフォルダにある `secrets.env.example` をコピーして `secrets.env` という名前のファイルを作り、実際の APIキーなどを書き込んで保存してください。
+
+```bash
+cp secrets.env.example secrets.env
+```
 
 **secrets.env**
 ```env
 OPENAI_API_KEY=sk-proj-xxxxxxxx... (あなたのOpenAI APIキー)
+# その他の設定は secrets.env.example を確認してください
 ```
 
 > 💡 **ポイント**: `secrets.env` は秘密の鍵なので、他人に見せたり Git にアップロードしたりしないでくださいね。

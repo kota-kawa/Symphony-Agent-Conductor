@@ -29,7 +29,7 @@
 - Never commit large diffs for these JSON files; they are runtime artifacts used for demos/local state only.
 
 ## Configuration & Secrets
-- `secrets.env` is auto-loaded in `multi_agent_app/config.py` before constants are computed (with a legacy `.env` fallback). Required keys include `OPENAI_API_KEY` plus optional overrides such as:
+- `secrets.env` is auto-loaded in `multi_agent_app/config.py` before constants are computed (with a legacy `.env` fallback). A `secrets.env.example` template is provided in the root directory to help you set up your own environment file. Required keys include `OPENAI_API_KEY` plus optional overrides such as:
   - `ORCHESTRATOR_MODEL`, `ORCHESTRATOR_MAX_TASKS`
   - `LIFESTYLE_API_BASE`, `LIFESTYLE_TIMEOUT`（Life-Assistantエージェント向け）
   - `BROWSER_AGENT_API_BASE`, `BROWSER_AGENT_CLIENT_BASE`, `BROWSER_EMBED_URL`

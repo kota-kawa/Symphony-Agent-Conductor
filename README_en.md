@@ -29,11 +29,16 @@ If you have Docker, the concert (system) starts with a single command! 🎼
 ### 1. Preparation 🔑
 
 First, write the API key that serves as the AI's brain into the configuration file.
-Create a file named `secrets.env` in the project folder and save the following content.
+Copy `secrets.env.example` in the project folder to create a file named `secrets.env`, and fill in your actual API keys.
+
+```bash
+cp secrets.env.example secrets.env
+```
 
 **secrets.env**
 ```env
 OPENAI_API_KEY=sk-proj-xxxxxxxx... (Your OpenAI API Key)
+# Check secrets.env.example for other configurations
 ```
 
 > 💡 **Note**: `secrets.env` is a secret key, so please do not show it to others or upload it to Git.
