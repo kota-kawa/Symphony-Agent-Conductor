@@ -1,21 +1,21 @@
-import { $ } from "./dom-utils.js";
-import { markAgentAvailable, markAgentUnavailable } from "./agent-status.js";
+import { $ } from "./dom-utils";
+import { markAgentAvailable, markAgentUnavailable } from "./agent-status";
 
 /* ---------- IoT Dashboard ---------- */
 
-const deviceGrid = $("#deviceGrid");
-const iotNotice = $("#iotNotice");
-const registerDeviceBtn = $("#registerDeviceBtn");
-const refreshDevicesBtn = $("#refreshDevicesBtn");
+let deviceGrid: HTMLElement | null = null;
+let iotNotice: HTMLElement | null = null;
+let registerDeviceBtn: HTMLButtonElement | null = null;
+let refreshDevicesBtn: HTMLButtonElement | null = null;
 
-const registerDialog = $("#iotRegisterDialog");
-const registerForm = $("#iotRegisterForm");
-const registerIdInput = $("#iotRegisterId");
-const registerNameInput = $("#iotRegisterName");
-const registerNoteInput = $("#iotRegisterNote");
-const registerMessageEl = $("#iotRegisterMessage");
-const registerCancelBtn = $("#iotRegisterCancel");
-const registerSubmitBtn = $("#iotRegisterSubmit");
+let registerDialog: HTMLDialogElement | null = null;
+let registerForm: HTMLFormElement | null = null;
+let registerIdInput: HTMLInputElement | null = null;
+let registerNameInput: HTMLInputElement | null = null;
+let registerNoteInput: HTMLInputElement | null = null;
+let registerMessageEl: HTMLElement | null = null;
+let registerCancelBtn: HTMLButtonElement | null = null;
+let registerSubmitBtn: HTMLButtonElement | null = null;
 
 const IOT_DEVICE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3" stroke="currentColor" stroke-width="1.6" fill="none" /><path d="M7 9h10M7 13h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>`;
 
@@ -23,29 +23,34 @@ const IOT_FETCH_INTERVAL = 6000;
 
 const PUBLIC_IOT_AGENT_BASE = "https://iot-agent.project-kk.com";
 
-const REGISTER_MESSAGE_DEFAULT = registerMessageEl?.textContent.trim() || "エッジデバイスで使用する識別子を入力し、必要に応じて表示名やメモを設定してください。";
+let REGISTER_MESSAGE_DEFAULT = "エッジデバイスで使用する識別子を入力し、必要に応じて表示名やメモを設定してください。";
 
-const iotState = {
+const iotState: {
+  devices: any[];
+  fetching: boolean;
+  initialized: boolean;
+  pollTimer: number | null;
+} = {
   devices: [],
   fetching: false,
   initialized: false,
   pollTimer: null,
 };
 
-let lastRegisteredDevice = null;
+let lastRegisteredDevice: { id: string; name: string } | null = null;
 
 function resolveIotAgentBase() {
-  const sanitize = value => (typeof value === "string" ? value.trim().replace(/\/+$/, "") : "");
+  const sanitize = (value: unknown) => (typeof value === "string" ? value.trim().replace(/\/+$/, "") : "");
   let queryBase = "";
   try {
     queryBase = new URLSearchParams(window.location.search).get("iot_agent_base") || "";
-  } catch (_) {
+  } catch {
     queryBase = "";
   }
   const sources = [
     sanitize(queryBase),
-    sanitize(window.IOT_AGENT_API_BASE),
-    sanitize(document.querySelector("meta[name='iot-agent-api-base']")?.content),
+    sanitize((window as any).IOT_AGENT_API_BASE),
+    sanitize(document.querySelector<HTMLMetaElement>("meta[name='iot-agent-api-base']")?.content),
   ];
   for (const base of sources) {
     if (base) return base;
@@ -61,7 +66,7 @@ function resolveIotAgentBase() {
 
 const IOT_AGENT_API_BASE = resolveIotAgentBase();
 
-function buildIotAgentUrl(path) {
+function buildIotAgentUrl(path: string) {
   if (!path) {
     return IOT_AGENT_API_BASE || "/iot_agent";
   }
@@ -79,16 +84,19 @@ function buildIotAgentUrl(path) {
   return `${base.replace(/\/+$/, "")}${normalizedPath}` || normalizedPath;
 }
 
-export async function iotAgentRequest(path, { method = "GET", headers = {}, body, signal } = {}) {
+export async function iotAgentRequest(
+  path: string,
+  { method = "GET", headers = {}, body, signal }: { method?: string; headers?: Record<string, string>; body?: BodyInit | null; signal?: AbortSignal } = {},
+) {
   const url = buildIotAgentUrl(path);
-  const finalHeaders = { ...headers };
+  const finalHeaders: Record<string, string> = { ...headers };
   const hasBody = body !== undefined && body !== null;
   const isFormData = typeof FormData !== "undefined" && body instanceof FormData;
   if (hasBody && !isFormData && !finalHeaders["Content-Type"]) {
     finalHeaders["Content-Type"] = "application/json";
   }
 
-  let response;
+  let response: Response;
   try {
     response = await fetch(url, {
       method,
@@ -98,17 +106,17 @@ export async function iotAgentRequest(path, { method = "GET", headers = {}, body
       mode: /^https?:/i.test(url) ? "cors" : "same-origin",
       credentials: /^https?:/i.test(url) ? "include" : "same-origin",
     });
-  } catch (error) {
+  } catch (error: any) {
     markAgentUnavailable("iot", error?.message || "接続に失敗しました。");
     return { data: { status: "unavailable", message: "IoT エージェントに接続できません。", error: error?.message }, status: 0, unavailable: true };
   }
 
   const contentType = response.headers.get("content-type") || "";
   const isJson = contentType.includes("application/json");
-  let data;
+  let data: any;
   try {
     data = isJson ? await response.json() : await response.text();
-  } catch (_) {
+  } catch {
     data = isJson ? {} : "";
   }
 
@@ -122,7 +130,7 @@ export async function iotAgentRequest(path, { method = "GET", headers = {}, body
       markAgentUnavailable("iot", message);
       return { data: { status: "unavailable", message: "IoT エージェントに接続できません。", error: message }, status: response.status, unavailable: true };
     }
-    const error = new Error(message);
+    const error = new Error(message) as any;
     error.status = response.status;
     error.data = data;
     throw error;
@@ -137,21 +145,21 @@ export async function iotAgentRequest(path, { method = "GET", headers = {}, body
   return { data: payload, status: response.status };
 }
 
-function showIotNotice(message, kind = "info") {
+function showIotNotice(message: string, kind = "info") {
   if (!iotNotice) return;
   iotNotice.hidden = false;
   iotNotice.textContent = message;
-  iotNotice.dataset.kind = kind;
+  (iotNotice as HTMLElement).dataset.kind = kind;
 }
 
 function hideIotNotice() {
   if (!iotNotice) return;
   iotNotice.hidden = true;
   iotNotice.textContent = "";
-  delete iotNotice.dataset.kind;
+  delete (iotNotice as HTMLElement).dataset.kind;
 }
 
-function iotDisplayName(device) {
+function iotDisplayName(device: any) {
   if (!device) return "";
   const meta = device.meta || {};
   const candidates = [meta.display_name, meta.note, meta.label, meta.location];
@@ -163,7 +171,7 @@ function iotDisplayName(device) {
   return device.device_id;
 }
 
-function formatIotTimestamp(ts) {
+function formatIotTimestamp(ts: number) {
   if (!ts && ts !== 0) return "-";
   const date = new Date(ts * 1000);
   if (Number.isNaN(date.getTime())) {
@@ -180,7 +188,7 @@ function formatIotTimestamp(ts) {
   });
 }
 
-function formatIotRelativeTime(ts) {
+function formatIotRelativeTime(ts: number) {
   if (!ts && ts !== 0) return "未記録";
   const date = new Date(ts * 1000);
   if (Number.isNaN(date.getTime())) {
@@ -200,7 +208,7 @@ function formatIotRelativeTime(ts) {
   return formatIotTimestamp(ts);
 }
 
-function formatIotMetaValue(value) {
+function formatIotMetaValue(value: any) {
   if (value === null) return "null";
   if (value === undefined) return "-";
   if (typeof value === "boolean") return value ? "true" : "false";
@@ -208,12 +216,12 @@ function formatIotMetaValue(value) {
   if (typeof value === "string") return value;
   try {
     return JSON.stringify(value);
-  } catch (_) {
+  } catch {
     return String(value);
   }
 }
 
-function createIotStat(label, value) {
+function createIotStat(label: string, value: any) {
   const wrapper = document.createElement("div");
   wrapper.className = "device-stat";
   const labelEl = document.createElement("div");
@@ -229,7 +237,7 @@ function createIotStat(label, value) {
   return wrapper;
 }
 
-function createCollapsibleText(text, { maxLength = 180 } = {}) {
+function createCollapsibleText(text: string, { maxLength = 180 }: { maxLength?: number } = {}) {
   const str = text == null ? "" : String(text);
   const wrapper = document.createElement("div");
   wrapper.className = "collapsible-text";
@@ -240,7 +248,7 @@ function createCollapsibleText(text, { maxLength = 180 } = {}) {
   wrapper.appendChild(content);
 
   if (str.length <= maxLength) {
-    wrapper.dataset.state = "expanded";
+    (wrapper as any).dataset.state = "expanded";
     return wrapper;
   }
 
@@ -257,13 +265,13 @@ function createCollapsibleText(text, { maxLength = 180 } = {}) {
   const applyState = () => {
     if (collapsed) {
       content.textContent = truncated;
-      wrapper.dataset.state = "collapsed";
+      (wrapper as any).dataset.state = "collapsed";
       toggleBtn.textContent = "もっと見る";
       toggleBtn.setAttribute("aria-expanded", "false");
       toggleBtn.setAttribute("aria-label", "全文を表示");
     } else {
       content.textContent = fullText;
-      wrapper.dataset.state = "expanded";
+      (wrapper as any).dataset.state = "expanded";
       toggleBtn.textContent = "閉じる";
       toggleBtn.setAttribute("aria-expanded", "true");
       toggleBtn.setAttribute("aria-label", "折りたたむ");
@@ -280,11 +288,11 @@ function createCollapsibleText(text, { maxLength = 180 } = {}) {
   return wrapper;
 }
 
-function renderIotCapabilities(capabilities) {
+function renderIotCapabilities(capabilities: any[]) {
   if (!Array.isArray(capabilities) || capabilities.length === 0) {
     return null;
   }
-  const names = [];
+  const names: string[] = [];
   for (const cap of capabilities) {
     if (cap && typeof cap.name === "string" && cap.name.trim()) {
       names.push(cap.name.trim());
@@ -302,7 +310,7 @@ function renderIotCapabilities(capabilities) {
   const list = document.createElement("div");
   list.className = "device-section__body";
   const maxChips = 8;
-  names.slice(0, maxChips).forEach(name => {
+  names.slice(0, maxChips).forEach((name) => {
     const chip = document.createElement("span");
     chip.className = "capability-badge";
     chip.textContent = name;
@@ -319,7 +327,7 @@ function renderIotCapabilities(capabilities) {
   return section;
 }
 
-function renderIotLastResult(result) {
+function renderIotLastResult(result: any) {
   if (!result || typeof result !== "object") return null;
   const section = document.createElement("div");
   section.className = "device-section";
@@ -364,21 +372,22 @@ function renderIotLastResult(result) {
 }
 
 function renderIotDevices() {
-  if (!deviceGrid) return;
-  deviceGrid.innerHTML = "";
+  const grid = deviceGrid;
+  if (!grid) return;
+  grid.innerHTML = "";
 
   if (!iotState.devices.length) {
     const empty = document.createElement("div");
     empty.className = "device-empty";
     empty.innerHTML = "<p>登録されたデバイスがありません。</p><p>右上の「デバイス登録」から登録してください。</p>";
-    deviceGrid.appendChild(empty);
+    grid.appendChild(empty);
     return;
   }
 
-  iotState.devices.forEach(device => {
+  iotState.devices.forEach((device) => {
     const card = document.createElement("article");
     card.className = "device-card";
-    card.dataset.deviceId = device.device_id;
+    (card as any).dataset.deviceId = device.device_id;
 
     const header = document.createElement("div");
     header.className = "device-card-header";
@@ -410,8 +419,8 @@ function renderIotDevices() {
     const renameBtn = document.createElement("button");
     renameBtn.type = "button";
     renameBtn.className = "icon-btn";
-    renameBtn.dataset.action = "rename";
-    renameBtn.dataset.deviceId = device.device_id;
+    (renameBtn as any).dataset.action = "rename";
+    (renameBtn as any).dataset.deviceId = device.device_id;
     renameBtn.title = "名称変更";
     renameBtn.setAttribute("aria-label", `${iotDisplayName(device)} の名前を変更`);
     renameBtn.textContent = "✎";
@@ -420,8 +429,8 @@ function renderIotDevices() {
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "icon-btn";
-    deleteBtn.dataset.action = "delete";
-    deleteBtn.dataset.deviceId = device.device_id;
+    (deleteBtn as any).dataset.action = "delete";
+    (deleteBtn as any).dataset.deviceId = device.device_id;
     deleteBtn.title = "デバイスを削除";
     deleteBtn.setAttribute("aria-label", `${iotDisplayName(device)} を削除`);
     deleteBtn.textContent = "🗑";
@@ -451,11 +460,11 @@ function renderIotDevices() {
     }
 
     card.appendChild(body);
-    deviceGrid.appendChild(card);
+    grid.appendChild(card);
   });
 }
 
-async function fetchIotDevices({ silent = false } = {}) {
+async function fetchIotDevices({ silent = false }: { silent?: boolean } = {}) {
   if (iotState.fetching) return;
   iotState.fetching = true;
   try {
@@ -474,10 +483,10 @@ async function fetchIotDevices({ silent = false } = {}) {
       iotState.devices = [];
     }
     renderIotDevices();
-    if (iotNotice?.dataset.kind === "error") {
+    if (iotNotice && (iotNotice as any).dataset.kind === "error") {
       hideIotNotice();
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Failed to fetch devices", error);
     if (!silent) {
       showIotNotice(`デバイス一覧の取得に失敗しました: ${error.message}`, "error");
@@ -487,7 +496,7 @@ async function fetchIotDevices({ silent = false } = {}) {
   }
 }
 
-async function updateIotDeviceDisplayName(deviceId, displayName) {
+async function updateIotDeviceDisplayName(deviceId: string, displayName: string) {
   const payload = { display_name: displayName || null };
   const { data, unavailable } = await iotAgentRequest(`/api/devices/${encodeURIComponent(deviceId)}/name`, {
     method: "PATCH",
@@ -500,7 +509,7 @@ async function updateIotDeviceDisplayName(deviceId, displayName) {
   return data?.device || null;
 }
 
-async function deleteIotDevice(deviceId) {
+async function deleteIotDevice(deviceId: string) {
   const { data, unavailable } = await iotAgentRequest(`/api/devices/${encodeURIComponent(deviceId)}`, {
     method: "DELETE",
   });
@@ -508,17 +517,18 @@ async function deleteIotDevice(deviceId) {
     showIotNotice(data?.message || "IoT エージェントに接続できません。", "error");
     return;
   }
+  return data;
 }
 
-function updateLocalDevice(updated) {
+function updateLocalDevice(updated: any) {
   if (!updated) return;
-  const index = iotState.devices.findIndex(device => device.device_id === updated.device_id);
+  const index = iotState.devices.findIndex((device) => device.device_id === updated.device_id);
   if (index !== -1) {
     iotState.devices[index] = updated;
   }
 }
 
-function setRegisterMessage(message, kind = "info") {
+function setRegisterMessage(message: string, kind: "info" | "error" | "success" = "info") {
   if (!registerMessageEl) return;
   registerMessageEl.textContent = message;
   registerMessageEl.className = "dialog-message";
@@ -538,7 +548,7 @@ function resetRegisterDialog() {
   setRegisterMessage(REGISTER_MESSAGE_DEFAULT);
 }
 
-async function handleRegisterSubmit(event) {
+async function handleRegisterSubmit(event: Event) {
   event.preventDefault();
   if (!registerSubmitBtn) return;
 
@@ -552,7 +562,7 @@ async function handleRegisterSubmit(event) {
     return;
   }
 
-  const payload = {
+  const payload: any = {
     device_id: deviceId,
     capabilities: [],
     meta: { registered_via: "dashboard" },
@@ -587,7 +597,7 @@ async function handleRegisterSubmit(event) {
     };
     setRegisterMessage(`デバイス ${lastRegisteredDevice.name} を登録しました。`, "success");
     registerDialog?.close("success");
-  } catch (error) {
+  } catch (error: any) {
     const message = error instanceof Error ? error.message : String(error);
     setRegisterMessage(`登録に失敗しました: ${message}`, "error");
   } finally {
@@ -603,7 +613,7 @@ function startIotPolling() {
   }, IOT_FETCH_INTERVAL);
 }
 
-export function ensureIotDashboardInitialized({ showLoading = false } = {}) {
+export function ensureIotDashboardInitialized({ showLoading = false }: { showLoading?: boolean } = {}) {
   if (!iotState.initialized) {
     iotState.initialized = true;
     fetchIotDevices();
@@ -615,109 +625,132 @@ export function ensureIotDashboardInitialized({ showLoading = false } = {}) {
   }
 }
 
-if (registerDeviceBtn && registerDialog) {
-  registerDeviceBtn.addEventListener("click", () => {
-    resetRegisterDialog();
-    registerDialog.showModal();
-    setTimeout(() => registerIdInput?.focus(), 50);
-  });
-}
+function bindIotEvents() {
+  if (registerDeviceBtn && registerDialog) {
+    registerDeviceBtn.addEventListener("click", () => {
+      resetRegisterDialog();
+      registerDialog?.showModal();
+      setTimeout(() => registerIdInput?.focus(), 50);
+    });
+  }
 
-if (registerCancelBtn && registerDialog) {
-  registerCancelBtn.addEventListener("click", () => {
-    registerDialog.close("cancel");
-  });
-}
+  if (registerCancelBtn && registerDialog) {
+    registerCancelBtn.addEventListener("click", () => {
+      registerDialog?.close("cancel");
+    });
+  }
 
-if (registerForm) {
-  registerForm.addEventListener("submit", handleRegisterSubmit);
-}
+  if (registerForm) {
+    registerForm.addEventListener("submit", handleRegisterSubmit);
+  }
 
-if (registerDialog) {
-  registerDialog.addEventListener("close", () => {
-    if (registerDialog.returnValue === "success" && lastRegisteredDevice) {
-      const label = lastRegisteredDevice.name || lastRegisteredDevice.id;
-      const suffix = lastRegisteredDevice.name && lastRegisteredDevice.name !== lastRegisteredDevice.id
-        ? ` (ID: ${lastRegisteredDevice.id})`
-        : "";
-      showIotNotice(`デバイス「${label}」${suffix}を登録しました。エッジデバイスをオンラインにするとジョブの取得を開始できます。`, "success");
-      fetchIotDevices({ silent: false });
-    }
-    lastRegisteredDevice = null;
-    resetRegisterDialog();
-  });
-}
+  if (registerDialog) {
+    registerDialog.addEventListener("close", () => {
+      if (registerDialog?.returnValue === "success" && lastRegisteredDevice) {
+        const label = lastRegisteredDevice.name || lastRegisteredDevice.id;
+        const suffix = lastRegisteredDevice.name && lastRegisteredDevice.name !== lastRegisteredDevice.id
+          ? ` (ID: ${lastRegisteredDevice.id})`
+          : "";
+        showIotNotice(`デバイス「${label}」${suffix}を登録しました。エッジデバイスをオンラインにするとジョブの取得を開始できます。`, "success");
+        fetchIotDevices({ silent: false });
+      }
+      lastRegisteredDevice = null;
+      resetRegisterDialog();
+    });
+  }
 
-if (refreshDevicesBtn) {
-  refreshDevicesBtn.addEventListener("click", () => {
-    fetchIotDevices();
-  });
-}
+  if (refreshDevicesBtn) {
+    refreshDevicesBtn.addEventListener("click", () => {
+      fetchIotDevices();
+    });
+  }
 
-if (deviceGrid) {
-  deviceGrid.addEventListener("click", async event => {
-    const target = event.target instanceof Element ? event.target.closest("button[data-action]") : null;
-    if (!target) return;
-    const action = target.dataset.action;
-    const deviceId = target.dataset.deviceId;
-    if (!action || !deviceId) return;
-    event.preventDefault();
+  if (deviceGrid) {
+    deviceGrid.addEventListener("click", async (event) => {
+      const target = event.target instanceof Element ? event.target.closest("button[data-action]") : null;
+      if (!target) return;
+      const action = (target as HTMLElement).dataset.action;
+      const deviceId = (target as HTMLElement).dataset.deviceId;
+      if (!action || !deviceId) return;
+      event.preventDefault();
 
-    if (action === "rename") {
-      const device = iotState.devices.find(d => d.device_id === deviceId);
-      const currentName = device?.meta?.display_name && typeof device.meta.display_name === "string"
-        ? device.meta.display_name
-        : "";
-      const promptLabel = currentName || iotDisplayName(device) || deviceId;
-      const newName = window.prompt(`「${promptLabel}」の新しい名前を入力してください。`, currentName);
-      if (newName === null) return;
-      const trimmed = newName.trim();
-      if (trimmed === (currentName || "").trim()) return;
-      try {
-        const updatedDevice = await updateIotDeviceDisplayName(deviceId, trimmed);
-        if (updatedDevice) {
-          updateLocalDevice(updatedDevice);
-          renderIotDevices();
-          showIotNotice(`デバイス名を「${iotDisplayName(updatedDevice)}」に更新しました。`, "success");
-          fetchIotDevices({ silent: true });
-        } else {
-          throw new Error("更新後のデバイス情報が取得できませんでした。");
+      if (action === "rename") {
+        const device = iotState.devices.find((d) => d.device_id === deviceId);
+        const currentName = device?.meta?.display_name && typeof device.meta.display_name === "string"
+          ? device.meta.display_name
+          : "";
+        const promptLabel = currentName || iotDisplayName(device) || deviceId;
+        const newName = window.prompt(`「${promptLabel}」の新しい名前を入力してください。`, currentName);
+        if (newName === null) return;
+        const trimmed = newName.trim();
+        if (trimmed === (currentName || "").trim()) return;
+        try {
+          const updatedDevice = await updateIotDeviceDisplayName(deviceId, trimmed);
+          if (updatedDevice) {
+            updateLocalDevice(updatedDevice);
+            renderIotDevices();
+            showIotNotice(`デバイス名を「${iotDisplayName(updatedDevice)}」に更新しました。`, "success");
+            fetchIotDevices({ silent: true });
+          } else {
+            throw new Error("更新後のデバイス情報が取得できませんでした。");
+          }
+        } catch (error: any) {
+          const message = error instanceof Error ? error.message : String(error);
+          showIotNotice(`名前の更新に失敗しました: ${message}`, "error");
         }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        showIotNotice(`名前の更新に失敗しました: ${message}`, "error");
+        return;
       }
-      return;
-    }
 
-    if (action === "delete") {
-      const device = iotState.devices.find(d => d.device_id === deviceId);
-      const label = iotDisplayName(device) || deviceId;
-      const confirmed = window.confirm(`デバイス「${label}」を削除しますか？\nジョブキューや履歴も失われます。`);
-      if (!confirmed) return;
-      try {
-        await deleteIotDevice(deviceId);
-        iotState.devices = iotState.devices.filter(d => d.device_id !== deviceId);
-        renderIotDevices();
-        showIotNotice(`デバイス「${label}」を削除しました。`, "success");
-        fetchIotDevices({ silent: true });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        showIotNotice(`デバイスの削除に失敗しました: ${message}`, "error");
+      if (action === "delete") {
+        const device = iotState.devices.find((d) => d.device_id === deviceId);
+        const label = iotDisplayName(device) || deviceId;
+        const confirmed = window.confirm(`デバイス「${label}」を削除しますか？\nジョブキューや履歴も失われます。`);
+        if (!confirmed) return;
+        try {
+          await deleteIotDevice(deviceId);
+          iotState.devices = iotState.devices.filter((d) => d.device_id !== deviceId);
+          renderIotDevices();
+          showIotNotice(`デバイス「${label}」を削除しました。`, "success");
+          fetchIotDevices({ silent: true });
+        } catch (error: any) {
+          const message = error instanceof Error ? error.message : String(error);
+          showIotNotice(`デバイスの削除に失敗しました: ${message}`, "error");
+        }
       }
-    }
-  });
+    });
+  }
+}
+
+export function initIotDom() {
+  deviceGrid = $("#deviceGrid");
+  iotNotice = $("#iotNotice");
+  registerDeviceBtn = $("#registerDeviceBtn") as HTMLButtonElement | null;
+  refreshDevicesBtn = $("#refreshDevicesBtn") as HTMLButtonElement | null;
+
+  registerDialog = $("#iotRegisterDialog") as HTMLDialogElement | null;
+  registerForm = $("#iotRegisterForm") as HTMLFormElement | null;
+  registerIdInput = $("#iotRegisterId") as HTMLInputElement | null;
+  registerNameInput = $("#iotRegisterName") as HTMLInputElement | null;
+  registerNoteInput = $("#iotRegisterNote") as HTMLInputElement | null;
+  registerMessageEl = $("#iotRegisterMessage");
+  registerCancelBtn = $("#iotRegisterCancel") as HTMLButtonElement | null;
+  registerSubmitBtn = $("#iotRegisterSubmit") as HTMLButtonElement | null;
+
+  REGISTER_MESSAGE_DEFAULT = registerMessageEl?.textContent?.trim()
+    || REGISTER_MESSAGE_DEFAULT;
+
+  bindIotEvents();
 }
 
 export function summarizeIotDevices() {
   if (!iotState.devices.length) {
     return "登録済みのデバイスはありません。";
   }
-  const summaries = iotState.devices.map(device => {
+  const summaries = iotState.devices.map((device) => {
     const caps = Array.isArray(device.capabilities)
-      ? device.capabilities.map(cap => cap?.name).filter(Boolean)
+      ? device.capabilities.map((cap: any) => cap?.name).filter(Boolean)
       : [];
-    const capText = caps.length ? `（機能: ${caps.join(", ")})` : "";
+    const capText = caps.length ? `（機能: ${caps.join(", ")}）` : "";
     return `${iotDisplayName(device)}${capText}`;
   });
   return summaries.join(" / ");

@@ -78,6 +78,9 @@ Desktop.ini
 # --- Docker ---
 docker-compose.override.yml
 
+# --- Node ---
+node_modules/
+
 # --- Misc ---
 *.sock
 *.pot
@@ -85,4 +88,3 @@ docker-compose.override.yml
 
 *.mo
 *.Identifier
-

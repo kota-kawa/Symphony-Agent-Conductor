@@ -1,64 +1,64 @@
-import { $, $$ } from "./dom-utils.js";
+import { $, $$ } from "./dom-utils";
 
-/* Single Page UI logic
- * - View switching (ブラウザ / IoT / 要約チャット)
- * - Browser stage (iframe embed / pseudo noVNC)
- * - IoT dashboard (mock devices, live chart, localStorage persist)
- * - Chat + extractive summarizer (pure client-side)
- */
+type ViewKey = "general" | "browser" | "iot" | "chat" | "schedule";
 
-const layoutEl = $(".layout");
-const sidebarEl = $(".sidebar");
-const sidebarToggle = $(".sidebar-toggle");
-
-let sidebarTogglePositionRaf = null;
-const updateSidebarTogglePosition = () => {
-  if (!layoutEl || !sidebarEl) return;
-
-  const sidebarRect = sidebarEl.getBoundingClientRect();
-  const layoutRect = layoutEl.getBoundingClientRect();
-  if (sidebarRect.height <= 0) return;
-
-  const offset = sidebarRect.top - layoutRect.top + sidebarRect.height / 2;
-  layoutEl.style.setProperty("--sidebar-toggle-top", `${offset}px`);
+type ViewActivationPayload = {
+  view: ViewKey;
+  isBrowserView: boolean;
+  isChatView: boolean;
+  isIotView: boolean;
+  isGeneralView: boolean;
+  isSchedulerView: boolean;
 };
 
-const scheduleSidebarTogglePosition = () => {
-  if (!layoutEl || !sidebarEl) return;
-  if (sidebarTogglePositionRaf !== null) return;
-
-  sidebarTogglePositionRaf = requestAnimationFrame(() => {
-    sidebarTogglePositionRaf = null;
-    updateSidebarTogglePosition();
-  });
+type GeneralProxyRenderPayload = {
+  agent: string | null;
+  view: ViewKey | null;
+  currentView: ViewKey;
 };
 
-/* ---------- View switching ---------- */
-const views = {
-  general: $("#view-general"),
-  browser: $("#view-browser"),
-  iot: $("#view-iot"),
-  chat: $("#view-chat"),
-  schedule: $("#view-schedule"),
+type GeneralProxyAgentPayload = {
+  previousAgent: string | null;
+  agent: string | null;
+  targetView: ViewKey | null;
 };
 
-const appTitle = $("#appTitle");
-const navButtons = $$(".nav-btn");
-const sidebarChatTitle = $(".sidebar-chat-title");
-const sidebarChatIcon = $(".sidebar-chat-icon");
-const sidebarChatTitleTextNode = sidebarChatTitle
-  ? Array.from(sidebarChatTitle.childNodes).find(
-      (node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim()
-    )
-  : null;
+let initialized = false;
 
-const generalDefaultContent = $("#generalDefaultContent");
-const generalProxyStatus = $("#generalProxyStatus");
-const generalProxyContainer = $("#generalProxyContainer");
-const generalViewPanel = views.general?.querySelector(".general-view") ?? null;
-let generalProxyFrame = null;
-let generalProxyIframe = null;
+let layoutEl: HTMLElement | null = null;
+let sidebarEl: HTMLElement | null = null;
+let sidebarToggle: HTMLButtonElement | null = null;
+
+let views: Record<ViewKey, HTMLElement | null> = {
+  general: null,
+  browser: null,
+  iot: null,
+  chat: null,
+  schedule: null,
+};
+
+let appTitle: HTMLElement | null = null;
+let navButtons: HTMLButtonElement[] = [];
+let sidebarChatTitle: HTMLElement | null = null;
+let sidebarChatIcon: HTMLElement | null = null;
+let sidebarChatTitleTextNode: ChildNode | null = null;
+
+let generalDefaultContent: HTMLElement | null = null;
+let generalProxyStatus: HTMLElement | null = null;
+let generalProxyContainer: HTMLElement | null = null;
+let generalViewPanel: HTMLElement | null = null;
+
+let generalProxyFrame: HTMLDivElement | null = null;
+let generalProxyIframe: HTMLIFrameElement | null = null;
 let generalProxyIframeSrc = "";
+
+let generalBrowserSurface: HTMLDivElement | null = null;
+let generalBrowserStage: HTMLDivElement | null = null;
+let generalBrowserFullscreenBtn: HTMLButtonElement | null = null;
+
+let sidebarTogglePositionRaf: number | null = null;
+
+const viewPlacements = new Map<HTMLElement, { parent: HTMLElement | null; placeholder: Comment }>();
 
 const ICONS = {
   generalChat: `<svg viewBox="0 0 24 24" fill="currentColor" focusable="false"><path d="M4 4h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H8l-4 4V5a1 1 0 0 1 1-1z"/></svg>`,
@@ -68,12 +68,7 @@ const ICONS = {
   scheduler: `<svg viewBox="0 0 24 24" fill="currentColor" focusable="false"><path d="M19 4h-1V2h-2v2H8V2H6v2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Zm0 14H5V10h14Zm0-12v2H5V6Z"/></svg>`,
 };
 
-let generalBrowserSurface = null;
-let generalBrowserStage = null;
-let generalBrowserFullscreenBtn = null;
-
-const viewPlacements = new Map();
-const AGENT_TO_VIEW_MAP = {
+const AGENT_TO_VIEW_MAP: Record<string, ViewKey> = {
   browser: "browser",
   browser_agent: "browser",
   web: "browser",
@@ -97,7 +92,8 @@ const AGENT_TO_VIEW_MAP = {
   scheduler: "schedule",
   scheduler_agent: "schedule",
 };
-const AGENT_RESULT_TARGETS = {
+
+const AGENT_RESULT_TARGETS: Record<string, string> = {
   browser: "browser",
   browser_agent: "browser",
   web: "browser",
@@ -121,13 +117,15 @@ const AGENT_RESULT_TARGETS = {
   scheduler: "scheduler",
   scheduler_agent: "scheduler",
 };
-const AGENT_RESULT_PATHS = {
+
+const AGENT_RESULT_PATHS: Record<string, string> = {
   browser: "/agent-result",
   lifestyle: "/agent-result",
   iot: "/agent_result.html",
   scheduler: "/agent-result",
 };
-const GENERAL_PROXY_AGENT_LABELS = {
+
+const GENERAL_PROXY_AGENT_LABELS: Record<string, string> = {
   lifestyle: "Life-Styleエージェント",
   "life-style": "Life-Styleエージェント",
   life_style: "Life-Styleエージェント",
@@ -139,25 +137,26 @@ const GENERAL_PROXY_AGENT_LABELS = {
   scheduler_agent: "Scheduler エージェント",
   chat: "要約チャット",
 };
+
 const BROWSER_AGENT_FINAL_MARKER = "[browser-agent-final]";
 
-function sanitizeBase(value) {
+function sanitizeBase(value: unknown): string {
   return typeof value === "string" ? value.trim().replace(/\/+$/, "") : "";
 }
 
-function readQueryParam(name) {
+function readQueryParam(name: string): string {
   try {
     return new URLSearchParams(window.location.search).get(name) || "";
-  } catch (_) {
+  } catch {
     return "";
   }
 }
 
-function resolveBrowserAgentResultBase() {
+function resolveBrowserAgentResultBase(): string {
   const sources = [
     sanitizeBase(readQueryParam("browser_agent_base")),
-    sanitizeBase(window.BROWSER_AGENT_API_BASE),
-    sanitizeBase(document.querySelector("meta[name='browser-agent-api-base']")?.content),
+    sanitizeBase((window as any).BROWSER_AGENT_API_BASE),
+    sanitizeBase(document.querySelector<HTMLMetaElement>("meta[name='browser-agent-api-base']")?.content),
   ];
   for (const base of sources) {
     if (base) return base;
@@ -165,11 +164,11 @@ function resolveBrowserAgentResultBase() {
   return "http://localhost:5005";
 }
 
-function resolveLifestyleAgentResultBase() {
+function resolveLifestyleAgentResultBase(): string {
   const sources = [
     sanitizeBase(readQueryParam("lifestyle_agent_base")),
-    sanitizeBase(window.LIFESTYLE_AGENT_BASE),
-    sanitizeBase(document.querySelector("meta[name='lifestyle-agent-api-base']")?.content),
+    sanitizeBase((window as any).LIFESTYLE_AGENT_BASE),
+    sanitizeBase(document.querySelector<HTMLMetaElement>("meta[name='lifestyle-agent-api-base']")?.content),
   ];
   for (const base of sources) {
     if (base) return base;
@@ -180,11 +179,11 @@ function resolveLifestyleAgentResultBase() {
   return "http://localhost:5000";
 }
 
-function resolveIotAgentResultBase() {
+function resolveIotAgentResultBase(): string {
   const sources = [
     sanitizeBase(readQueryParam("iot_agent_base")),
-    sanitizeBase(window.IOT_AGENT_API_BASE),
-    sanitizeBase(document.querySelector("meta[name='iot-agent-api-base']")?.content),
+    sanitizeBase((window as any).IOT_AGENT_API_BASE),
+    sanitizeBase(document.querySelector<HTMLMetaElement>("meta[name='iot-agent-api-base']")?.content),
   ];
   for (const base of sources) {
     if (base) return base;
@@ -195,11 +194,11 @@ function resolveIotAgentResultBase() {
   return "https://iot-agent.project-kk.com";
 }
 
-function resolveSchedulerAgentResultBase() {
+function resolveSchedulerAgentResultBase(): string {
   const sources = [
     sanitizeBase(readQueryParam("scheduler_agent_base")),
-    sanitizeBase(window.SCHEDULER_AGENT_BASE),
-    sanitizeBase(document.querySelector("meta[name='scheduler-agent-api-base']")?.content),
+    sanitizeBase((window as any).SCHEDULER_AGENT_BASE),
+    sanitizeBase(document.querySelector<HTMLMetaElement>("meta[name='scheduler-agent-api-base']")?.content),
   ];
   for (const base of sources) {
     if (base) return base;
@@ -217,14 +216,14 @@ const AGENT_RESULT_BASES = {
   scheduler: resolveSchedulerAgentResultBase(),
 };
 
-function resolveAgentResultBase(agentKey) {
+function resolveAgentResultBase(agentKey: string): string {
   if (typeof agentKey !== "string") return "";
   const normalized = agentKey.trim().toLowerCase();
   const target = AGENT_RESULT_TARGETS[normalized] || normalized;
-  return AGENT_RESULT_BASES[target] || "";
+  return (AGENT_RESULT_BASES as Record<string, string>)[target] || "";
 }
 
-function buildAgentResultUrl(agentKey) {
+function buildAgentResultUrl(agentKey: string): string {
   if (!agentKey) return "";
   const normalized = agentKey.trim().toLowerCase();
   const target = AGENT_RESULT_TARGETS[normalized] || normalized;
@@ -237,7 +236,7 @@ function buildAgentResultUrl(agentKey) {
   return `${cleanedBase}${cleanedPath}`;
 }
 
-function resolveAgentLabel(agentKey) {
+function resolveAgentLabel(agentKey: string): string {
   if (!agentKey) return "";
   const normalized = agentKey.trim().toLowerCase();
   const directLabel = GENERAL_PROXY_AGENT_LABELS[normalized];
@@ -249,13 +248,13 @@ function resolveAgentLabel(agentKey) {
 function initAgentResultHosts() {
   const hosts = $$(".agent-result-view");
   if (!hosts.length) return;
-  hosts.forEach(host => {
+  hosts.forEach((host) => {
     if (!host) return;
-    const agentKey = host.dataset.agent || "";
+    const agentKey = (host as HTMLElement).dataset.agent || "";
     if (!agentKey) return;
     const url = buildAgentResultUrl(agentKey);
     if (!url) return;
-    let iframe = host.querySelector("iframe");
+    let iframe = host.querySelector<HTMLIFrameElement>("iframe");
     if (!iframe) {
       iframe = document.createElement("iframe");
       iframe.setAttribute("loading", "lazy");
@@ -269,39 +268,44 @@ function initAgentResultHosts() {
   });
 }
 
-export function containsBrowserAgentFinalMarker(text) {
+export function containsBrowserAgentFinalMarker(text: string): boolean {
   return typeof text === "string" && text.includes(BROWSER_AGENT_FINAL_MARKER);
 }
 
-let generalProxyTargetView = null;
-let generalProxyAgentKey = null;
-let generalProxyViewKey = null;
-export const initialActiveView = document.querySelector(".nav-btn.active")?.dataset.view || "general";
-let currentViewKey = initialActiveView;
-let viewActivationHook = null;
-let generalProxyRenderHook = null;
-let generalProxyAgentHook = null;
+let generalProxyTargetView: ViewKey | null = null;
+let generalProxyAgentKey: string | null = null;
+let generalProxyViewKey: ViewKey | null = null;
+let currentViewKey: ViewKey = "general";
+let viewActivationHook: ((payload: ViewActivationPayload) => void) | null = null;
+let generalProxyRenderHook: ((payload: GeneralProxyRenderPayload) => void) | null = null;
+let generalProxyAgentHook: ((payload: GeneralProxyAgentPayload) => void) | null = null;
 
-export function registerViewActivationHook(handler) {
+export function getInitialActiveView(): ViewKey {
+  const active = document.querySelector<HTMLButtonElement>(".nav-btn.active")?.dataset.view;
+  const key = (active as ViewKey) || "general";
+  return Object.prototype.hasOwnProperty.call(views, key) ? key : "general";
+}
+
+export function registerViewActivationHook(handler: ((payload: ViewActivationPayload) => void) | null) {
   viewActivationHook = typeof handler === "function" ? handler : null;
 }
 
-export function registerGeneralProxyRenderHook(handler) {
+export function registerGeneralProxyRenderHook(handler: ((payload: GeneralProxyRenderPayload) => void) | null) {
   generalProxyRenderHook = typeof handler === "function" ? handler : null;
 }
 
-export function registerGeneralProxyAgentHook(handler) {
+export function registerGeneralProxyAgentHook(handler: ((payload: GeneralProxyAgentPayload) => void) | null) {
   generalProxyAgentHook = typeof handler === "function" ? handler : null;
 }
 
-function resolveAgentToView(agentKey) {
+function resolveAgentToView(agentKey: string): ViewKey | null {
   if (typeof agentKey !== "string") return null;
   const normalized = agentKey.trim().toLowerCase();
   if (!normalized) return null;
   return AGENT_TO_VIEW_MAP[normalized] || null;
 }
 
-function ensureGeneralProxyFrame() {
+function ensureGeneralProxyFrame(): HTMLIFrameElement | null {
   if (!generalProxyContainer) return null;
   if (!generalProxyFrame) {
     generalProxyFrame = document.createElement("div");
@@ -322,7 +326,7 @@ function ensureGeneralProxyFrame() {
   return generalProxyIframe;
 }
 
-function updateGeneralProxyFrame(agentKey) {
+function updateGeneralProxyFrame(agentKey: string) {
   const iframe = ensureGeneralProxyFrame();
   if (!iframe) return;
   const nextSrc = buildAgentResultUrl(agentKey);
@@ -342,12 +346,11 @@ function clearGeneralProxyFrame() {
   }
 }
 
-function ensureViewPlacement(viewEl) {
-  if (!viewEl) return null;
+function ensureViewPlacement(viewEl: HTMLElement): { parent: HTMLElement | null; placeholder: Comment } {
   let placement = viewPlacements.get(viewEl);
   if (!placement) {
     placement = {
-      parent: viewEl.parentElement,
+      parent: viewEl.parentElement as HTMLElement | null,
       placeholder: document.createComment(`placeholder:${viewEl.id || ""}`),
     };
     viewPlacements.set(viewEl, placement);
@@ -355,7 +358,7 @@ function ensureViewPlacement(viewEl) {
   return placement;
 }
 
-function restoreView(viewKey) {
+function restoreView(viewKey: ViewKey) {
   if (viewKey === "browser") {
     deactivateGeneralBrowserProxy();
     return;
@@ -375,7 +378,7 @@ function restoreView(viewKey) {
   viewEl.classList.remove("general-proxy-active");
 }
 
-function moveViewToGeneral(viewKey) {
+function moveViewToGeneral(viewKey: ViewKey) {
   if (viewKey === "browser") {
     if (generalProxyViewKey && generalProxyViewKey !== viewKey) {
       restoreView(generalProxyViewKey);
@@ -412,7 +415,7 @@ function clearGeneralProxy() {
 
 function updateGeneralViewProxy() {
   const hasProxyAgent = Boolean(generalProxyAgentKey);
-  if (hasProxyAgent) {
+  if (hasProxyAgent && generalProxyAgentKey) {
     updateGeneralProxyFrame(generalProxyAgentKey);
   } else {
     clearGeneralProxy();
@@ -461,11 +464,11 @@ function updateGeneralViewProxy() {
   }
 }
 
-export function isGeneralProxyAgentBrowser() {
+export function isGeneralProxyAgentBrowser(): boolean {
   return generalProxyAgentKey === "browser";
 }
 
-export function setGeneralProxyAgent(agentKey) {
+export function setGeneralProxyAgent(agentKey: string | null) {
   const normalizedAgent = typeof agentKey === "string" ? agentKey.trim().toLowerCase() : "";
   const targetView = resolveAgentToView(normalizedAgent);
   const previousAgent = generalProxyAgentKey;
@@ -481,7 +484,7 @@ export function setGeneralProxyAgent(agentKey) {
   updateGeneralViewProxy();
 }
 
-export function determineGeneralProxyAgentFromResult(result) {
+export function determineGeneralProxyAgentFromResult(result: any): string | null {
   if (!result || typeof result !== "object") return null;
   const executions = Array.isArray(result.executions) ? result.executions : [];
   for (let index = executions.length - 1; index >= 0; index -= 1) {
@@ -491,14 +494,12 @@ export function determineGeneralProxyAgentFromResult(result) {
     }
   }
   const tasks = Array.isArray(result.tasks) ? result.tasks : [];
-  const nextTask = tasks.find(task => typeof task?.agent === "string" && task.agent.trim());
+  const nextTask = tasks.find((task: any) => typeof task?.agent === "string" && task.agent.trim());
   return nextTask ? nextTask.agent.trim().toLowerCase() : null;
 }
 
-export function activateView(viewKey) {
-  const target = Object.prototype.hasOwnProperty.call(views, viewKey)
-    ? viewKey
-    : "browser";
+export function activateView(viewKey: ViewKey) {
+  const target = Object.prototype.hasOwnProperty.call(views, viewKey) ? viewKey : "browser";
   currentViewKey = target;
   navButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.view === target);
@@ -507,7 +508,7 @@ export function activateView(viewKey) {
     if (!el) return;
     el.classList.toggle("active", key === target);
   });
-  const titles = {
+  const titles: Record<ViewKey, string> = {
     general: "一般ビュー",
     browser: "リモートブラウザ",
     iot: "IoT ダッシュボード",
@@ -518,7 +519,6 @@ export function activateView(viewKey) {
     appTitle.textContent = titles[target] ?? "リモートブラウザ";
   }
 
-  // Update sidebar chat title and icon based on the current view
   if (sidebarChatTitleTextNode && sidebarChatIcon) {
     const isGeneralViewActive = target === "general";
     let titleText = isGeneralViewActive ? " 共通チャット" : " Life-Style エージェント";
@@ -535,7 +535,9 @@ export function activateView(viewKey) {
       iconSvg = ICONS.scheduler;
     }
 
-    sidebarChatTitleTextNode.textContent = titleText;
+    if (sidebarChatTitleTextNode.nodeType === Node.TEXT_NODE) {
+      sidebarChatTitleTextNode.textContent = titleText;
+    }
     sidebarChatIcon.innerHTML = iconSvg;
   }
 
@@ -547,70 +549,43 @@ export function activateView(viewKey) {
 
   if (typeof viewActivationHook === "function") {
     viewActivationHook({
-    view: target,
-    isBrowserView,
-    isChatView,
-    isIotView,
-    isGeneralView,
-    isSchedulerView,
-  });
+      view: target,
+      isBrowserView,
+      isChatView,
+      isIotView,
+      isGeneralView,
+      isSchedulerView,
+    });
   }
   updateGeneralViewProxy();
   scheduleSidebarTogglePosition();
 }
 
-navButtons.forEach(btn => {
-  btn.addEventListener("click", () => {
-    activateView(btn.dataset.view);
-  });
-});
+function updateSidebarTogglePosition() {
+  if (!layoutEl || !sidebarEl) return;
 
-initAgentResultHosts();
+  const sidebarRect = sidebarEl.getBoundingClientRect();
+  const layoutRect = layoutEl.getBoundingClientRect();
+  if (sidebarRect.height <= 0) return;
 
-/* ---------- Sidebar toggle ---------- */
-if (layoutEl && sidebarToggle && sidebarEl) {
-  const setSidebarCollapsed = collapsed => {
-    layoutEl.classList.toggle("sidebar-collapsed", collapsed);
-    const label = collapsed ? "サイドバーを表示する" : "サイドバーを折りたたむ";
-    sidebarToggle.setAttribute("aria-expanded", String(!collapsed));
-    sidebarToggle.setAttribute("aria-label", label);
-    sidebarToggle.setAttribute("title", label);
-    scheduleSidebarTogglePosition();
-  };
-
-  setSidebarCollapsed(false);
-
-  sidebarToggle.addEventListener("click", () => {
-    const collapsed = !layoutEl.classList.contains("sidebar-collapsed");
-    setSidebarCollapsed(collapsed);
-  });
-
-  const mq = window.matchMedia("(max-width: 960px)");
-  const handleMq = event => {
-    if (event.matches) {
-      setSidebarCollapsed(false);
-    }
-  };
-
-  handleMq(mq);
-  if (typeof mq.addEventListener === "function") mq.addEventListener("change", handleMq);
-  else if (typeof mq.addListener === "function") mq.addListener(handleMq);
-
-  window.addEventListener("resize", scheduleSidebarTogglePosition);
-  window.addEventListener("scroll", scheduleSidebarTogglePosition, { passive: true });
-
-  if (typeof ResizeObserver === "function") {
-    const sidebarResizeObserver = new ResizeObserver(scheduleSidebarTogglePosition);
-    sidebarResizeObserver.observe(sidebarEl);
-  }
+  const offset = sidebarRect.top - layoutRect.top + sidebarRect.height / 2;
+  layoutEl.style.setProperty("--sidebar-toggle-top", `${offset}px`);
 }
 
-/* ---------- Browser stage (noVNC 風) ---------- */
-const browserStage = $("#browserStage");
-const browserFullscreenBtn = $("#fullscreenBtn");
+const scheduleSidebarTogglePosition = () => {
+  if (!layoutEl || !sidebarEl) return;
+  if (sidebarTogglePositionRaf !== null) return;
 
-const noVncControllers = new Set();
-let generalBrowserController = null;
+  sidebarTogglePositionRaf = requestAnimationFrame(() => {
+    sidebarTogglePositionRaf = null;
+    updateSidebarTogglePosition();
+  });
+};
+
+/* ---------- Browser stage (noVNC 風) ---------- */
+const noVncControllers = new Set<any>();
+let generalBrowserController: any = null;
+let mainBrowserController: any = null;
 
 const ALLOWED_RESIZE_VALUES = new Set(["scale", "remote", "off"]);
 const DEFAULT_NOVNC_PARAMS = {
@@ -620,7 +595,7 @@ const DEFAULT_NOVNC_PARAMS = {
   view_clip: "false",
 };
 
-function normalizeBrowserEmbedUrl(value) {
+function normalizeBrowserEmbedUrl(value: string): string {
   if (!value) return value;
 
   try {
@@ -649,16 +624,16 @@ function normalizeBrowserEmbedUrl(value) {
     }
 
     return url.toString();
-  } catch (_error) {
+  } catch {
     return value;
   }
 }
 
-function resolveBrowserEmbedUrl() {
-  const sanitize = value => (typeof value === "string" ? value.trim() : "");
-  const hasProtocol = value => /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value);
+function resolveBrowserEmbedUrl(): string {
+  const sanitize = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+  const hasProtocol = (value: string) => /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value);
   const localHosts = new Set(["localhost", "127.0.0.1", "::1"]);
-  const isLocalHost = host => typeof host === "string" && localHosts.has(host.toLowerCase());
+  const isLocalHost = (host: string) => typeof host === "string" && localHosts.has(host.toLowerCase());
   const preferredProtocol = () => {
     if (window.location.protocol === "http:" || window.location.protocol === "https:") {
       return window.location.protocol;
@@ -669,14 +644,14 @@ function resolveBrowserEmbedUrl() {
   let queryValue = "";
   try {
     queryValue = new URLSearchParams(window.location.search).get("browser_embed_url") || "";
-  } catch (_) {
+  } catch {
     queryValue = "";
   }
 
   const sources = [
     sanitize(queryValue),
-    sanitize(window.BROWSER_EMBED_URL),
-    sanitize(document.querySelector("meta[name='browser-embed-url']")?.content),
+    sanitize((window as any).BROWSER_EMBED_URL),
+    sanitize(document.querySelector<HTMLMetaElement>("meta[name='browser-embed-url']")?.content),
   ];
 
   for (const candidate of sources) {
@@ -692,7 +667,7 @@ function resolveBrowserEmbedUrl() {
           parsed.protocol = preferredProtocol();
         }
         return normalizeBrowserEmbedUrl(parsed.toString());
-      } catch (_) {
+      } catch {
         return normalizeBrowserEmbedUrl(candidate);
       }
     }
@@ -706,7 +681,7 @@ function resolveBrowserEmbedUrl() {
         absolute.protocol = preferredProtocol();
       }
       return normalizeBrowserEmbedUrl(absolute.toString());
-    } catch (_) {
+    } catch {
       continue;
     }
   }
@@ -722,30 +697,30 @@ function resolveBrowserEmbedUrl() {
 
 const BROWSER_EMBED_URL = resolveBrowserEmbedUrl();
 
-function reloadBrowserIframeWithCacheBust(iframe) {
+function reloadBrowserIframeWithCacheBust(iframe: HTMLIFrameElement | null) {
   if (!iframe) return;
   const base = iframe.src || BROWSER_EMBED_URL;
   try {
     const url = new URL(base, window.location.origin);
     url.searchParams.set("_ts", Date.now().toString(36));
     iframe.src = url.toString();
-  } catch (_error) {
+  } catch {
     iframe.src = base;
   }
 }
 
-function createNoVncController({ stage, fullscreenButton, context = "default" } = {}) {
+function createNoVncController({ stage, fullscreenButton, context = "default" }: { stage: HTMLElement | null; fullscreenButton?: HTMLButtonElement | null; context?: string; }) {
   if (!stage) return null;
 
   const state = {
-    iframe: null,
+    iframe: null as HTMLIFrameElement | null,
     origin: "*",
-    deferredRaf: null,
+    deferredRaf: null as number | null,
     deferredReloadFallback: false,
-    stageResizeObserver: null,
-    stageResizeRaf: null,
-    statusEl: null,
-    connectTimer: null,
+    stageResizeObserver: null as ResizeObserver | null,
+    stageResizeRaf: null as number | null,
+    statusEl: null as HTMLElement | null,
+    connectTimer: null as number | null,
     connectAttempts: 0,
     lastReadyAt: 0,
   };
@@ -765,19 +740,20 @@ function createNoVncController({ stage, fullscreenButton, context = "default" } 
   const CONNECT_CHECK_MS = 8000;
   const CONNECT_RETRY_DELAYS = [2000, 4000, 7000];
 
-  function ensureStatusEl() {
+  function ensureStatusEl(): HTMLElement | null {
     if (state.statusEl) return state.statusEl;
-    let fallback = stage.querySelector(".stage-fallback");
+    const stageEl = stage as HTMLElement;
+    let fallback = stageEl.querySelector<HTMLElement>(".stage-fallback");
     if (!fallback) {
       fallback = document.createElement("p");
       fallback.className = "stage-fallback";
-      stage.appendChild(fallback);
+      stageEl.appendChild(fallback);
     }
     state.statusEl = fallback;
     return fallback;
   }
 
-  function setStatus({ message, kind = "loading", hidden = false } = {}) {
+  function setStatus({ message, kind = "loading", hidden = false }: { message?: string; kind?: "loading" | "error"; hidden?: boolean; } = {}) {
     const el = ensureStatusEl();
     if (!el) return;
     el.textContent = message || "";
@@ -797,12 +773,12 @@ function createNoVncController({ stage, fullscreenButton, context = "default" } 
     try {
       const parsed = new URL(BROWSER_EMBED_URL, window.location.origin);
       return parsed.host || parsed.hostname || "127.0.0.1:7900";
-    } catch (_error) {
+    } catch {
       return "127.0.0.1:7900";
     }
   }
 
-  function buildFailureMessage({ retrying = false } = {}) {
+  function buildFailureMessage({ retrying = false }: { retrying?: boolean } = {}) {
     const hostLabel = getEmbedHostLabel();
     const lines = [
       "リモートブラウザに接続できませんでした。",
@@ -820,7 +796,7 @@ function createNoVncController({ stage, fullscreenButton, context = "default" } 
 
   function scheduleConnectionCheck(delay = CONNECT_CHECK_MS) {
     clearConnectTimer();
-    state.connectTimer = setTimeout(() => {
+    state.connectTimer = window.setTimeout(() => {
       if (state.lastReadyAt) {
         return;
       }
@@ -851,7 +827,7 @@ function createNoVncController({ stage, fullscreenButton, context = "default" } 
       return null;
     }
 
-    let iframe = stage.querySelector("iframe");
+    let iframe = stage.querySelector<HTMLIFrameElement>("iframe");
     const titleSuffix = context === "general-proxy" ? " (一般ビュー)" : "";
     if (!iframe) {
       stage.innerHTML = "";
@@ -875,7 +851,7 @@ function createNoVncController({ stage, fullscreenButton, context = "default" } 
     try {
       const parsed = new URL(iframe.src, window.location.origin);
       state.origin = parsed.origin || "*";
-    } catch (_error) {
+    } catch {
       state.origin = "*";
     }
 
@@ -884,7 +860,7 @@ function createNoVncController({ stage, fullscreenButton, context = "default" } 
     return iframe;
   }
 
-  function sync({ reloadFallback = false } = {}) {
+  function sync({ reloadFallback = false }: { reloadFallback?: boolean } = {}) {
     if (!state.iframe) {
       ensureIframe();
       if (!state.iframe) {
@@ -892,9 +868,9 @@ function createNoVncController({ stage, fullscreenButton, context = "default" } 
       }
     }
 
-    const rect = stage?.getBoundingClientRect?.();
-    const width = Math.round((rect && rect.width) || stage?.clientWidth || 0);
-    const height = Math.round((rect && rect.height) || stage?.clientHeight || 0);
+    const rect = (stage as HTMLElement)?.getBoundingClientRect?.();
+    const width = Math.round((rect && rect.width) || (stage as HTMLElement)?.clientWidth || 0);
+    const height = Math.round((rect && rect.height) || (stage as HTMLElement)?.clientHeight || 0);
     if (width <= 0 || height <= 0) {
       if (reloadFallback) {
         controller.requestSync();
@@ -907,8 +883,8 @@ function createNoVncController({ stage, fullscreenButton, context = "default" } 
       type: "novnc.viewport.sync",
       width,
       height,
-      stageWidth: Math.round(stage?.clientWidth || width),
-      stageHeight: Math.round(stage?.clientHeight || height),
+      stageWidth: Math.round((stage as HTMLElement)?.clientWidth || width),
+      stageHeight: Math.round((stage as HTMLElement)?.clientHeight || height),
       devicePixelRatio: Number(window.devicePixelRatio) || 1,
       innerWidth: typeof window.innerWidth === "number" ? window.innerWidth : width,
       innerHeight: typeof window.innerHeight === "number" ? window.innerHeight : height,
@@ -920,7 +896,7 @@ function createNoVncController({ stage, fullscreenButton, context = "default" } 
     try {
       state.iframe.contentWindow?.postMessage(payload, state.origin || "*");
       posted = true;
-    } catch (_error) {
+    } catch {
       posted = false;
     }
 
@@ -929,7 +905,7 @@ function createNoVncController({ stage, fullscreenButton, context = "default" } 
     }
   }
 
-  function requestSync({ reloadFallback = false } = {}) {
+  function requestSync({ reloadFallback = false }: { reloadFallback?: boolean } = {}) {
     state.deferredReloadFallback = state.deferredReloadFallback || reloadFallback;
     if (state.deferredRaf !== null) {
       return;
@@ -951,22 +927,22 @@ function createNoVncController({ stage, fullscreenButton, context = "default" } 
       return;
     }
 
-    const lastReload = Number(iframe.dataset?.novncReloadTs || "0");
+    const lastReload = Number((iframe as any).dataset?.novncReloadTs || "0");
     const now = Date.now();
     if (!lastReload || now - lastReload > 1500) {
-      if (iframe.dataset) {
-        iframe.dataset.novncReloadTs = String(now);
+      if ((iframe as any).dataset) {
+        (iframe as any).dataset.novncReloadTs = String(now);
       }
       reloadBrowserIframeWithCacheBust(iframe);
     }
   }
 
-  function matchesWindow(win) {
+  function matchesWindow(win: Window | null) {
     return Boolean(state.iframe && win === state.iframe.contentWindow);
   }
 
   if (typeof ResizeObserver === "function") {
-    state.stageResizeObserver = new ResizeObserver(entries => {
+    state.stageResizeObserver = new ResizeObserver((entries) => {
       if (!entries || entries.length === 0) return;
       const entry = entries[0];
       const { width, height } = entry.contentRect || {};
@@ -984,79 +960,21 @@ function createNoVncController({ stage, fullscreenButton, context = "default" } 
         controller.requestSync();
       });
     });
-    state.stageResizeObserver.observe(stage);
+    state.stageResizeObserver.observe(stage as Element);
   }
 
   if (fullscreenButton) {
     fullscreenButton.addEventListener("click", () => {
       const el = state.iframe ?? stage;
       if (!el) return;
-      if (document.fullscreenElement) document.exitFullscreen();
-      else el.requestFullscreen?.();
+      if (document.fullscreenElement) (document as any).exitFullscreen();
+      else (el as any).requestFullscreen?.();
     });
   }
 
   noVncControllers.add(controller);
   return controller;
 }
-
-const mainBrowserController = createNoVncController({
-  stage: browserStage,
-  fullscreenButton: browserFullscreenBtn,
-  context: "browser-view",
-});
-
-if (mainBrowserController) {
-  mainBrowserController.ensureIframe();
-}
-
-window.addEventListener("message", event => {
-  const data = event?.data;
-  if (!data || typeof data !== "object") {
-    return;
-  }
-
-  const { type } = data;
-  if (typeof type !== "string") {
-    return;
-  }
-
-  const normalizedType = type.toLowerCase();
-  if (
-    normalizedType === "novnc.viewport.request" ||
-    normalizedType === "novnc.viewport.requestsync" ||
-    normalizedType === "novnc.viewport.ready" ||
-    normalizedType === "novnc.ready"
-  ) {
-    let handled = false;
-    for (const controller of noVncControllers) {
-      if (!controller) continue;
-      if (!event.source || controller.matchesWindow(event.source)) {
-        controller.markReady?.();
-        controller.requestSync();
-        handled = true;
-      }
-    }
-    if (!handled) {
-      for (const controller of noVncControllers) {
-        controller?.markReady?.();
-        controller?.requestSync();
-      }
-    }
-    return;
-  }
-
-  if (
-    normalizedType === "novnc.viewport.reload" || normalizedType === "novnc.reload"
-  ) {
-    for (const controller of noVncControllers) {
-      if (!controller) continue;
-      if (!event.source || controller.matchesWindow(event.source)) {
-        controller.reload();
-      }
-    }
-  }
-});
 
 function ensureGeneralBrowserProxyElements() {
   if (generalBrowserSurface && generalBrowserStage && generalBrowserFullscreenBtn) {
@@ -1157,14 +1075,14 @@ function deactivateGeneralBrowserProxy() {
   generalBrowserSurface.hidden = true;
 }
 
-export function requestMainBrowserViewportSync({ reloadFallback = false } = {}) {
+export function requestMainBrowserViewportSync({ reloadFallback = false }: { reloadFallback?: boolean } = {}) {
   if (!mainBrowserController) {
     return;
   }
   mainBrowserController.requestSync({ reloadFallback });
 }
 
-function requestGeneralBrowserViewportSync({ reloadFallback = false } = {}) {
+function requestGeneralBrowserViewportSync({ reloadFallback = false }: { reloadFallback?: boolean } = {}) {
   const controller = ensureGeneralNoVncController();
   if (!controller) {
     return;
@@ -1172,5 +1090,174 @@ function requestGeneralBrowserViewportSync({ reloadFallback = false } = {}) {
   controller.ensureIframe();
   if (generalBrowserSurface?.isConnected) {
     controller.requestSync({ reloadFallback });
+  }
+}
+
+function bindNavButtons() {
+  navButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      activateView((btn.dataset.view as ViewKey) || "general");
+    });
+  });
+}
+
+function bindSidebarToggle() {
+  if (layoutEl && sidebarToggle && sidebarEl) {
+    const setSidebarCollapsed = (collapsed: boolean) => {
+      layoutEl?.classList.toggle("sidebar-collapsed", collapsed);
+      const label = collapsed ? "サイドバーを表示する" : "サイドバーを折りたたむ";
+      sidebarToggle?.setAttribute("aria-expanded", String(!collapsed));
+      sidebarToggle?.setAttribute("aria-label", label);
+      sidebarToggle?.setAttribute("title", label);
+      scheduleSidebarTogglePosition();
+    };
+
+    setSidebarCollapsed(false);
+
+    sidebarToggle.addEventListener("click", () => {
+      const collapsed = !layoutEl?.classList.contains("sidebar-collapsed");
+      setSidebarCollapsed(Boolean(collapsed));
+    });
+
+    const mq = window.matchMedia("(max-width: 960px)");
+    const handleMq = (event: MediaQueryListEvent | MediaQueryList) => {
+      if (("matches" in event) && event.matches) {
+        setSidebarCollapsed(false);
+      }
+    };
+
+    handleMq(mq);
+    if (typeof mq.addEventListener === "function") mq.addEventListener("change", handleMq);
+    else if (typeof (mq as any).addListener === "function") (mq as any).addListener(handleMq);
+
+    window.addEventListener("resize", scheduleSidebarTogglePosition);
+    window.addEventListener("scroll", scheduleSidebarTogglePosition, { passive: true });
+
+    if (typeof ResizeObserver === "function" && sidebarEl) {
+      const sidebarResizeObserver = new ResizeObserver(scheduleSidebarTogglePosition);
+      sidebarResizeObserver.observe(sidebarEl);
+    }
+  }
+}
+
+function bindNoVncWindowMessages() {
+  window.addEventListener("message", (event) => {
+    const data = (event as MessageEvent).data as any;
+    if (!data || typeof data !== "object") {
+      return;
+    }
+
+    const { type } = data;
+    if (typeof type !== "string") {
+      return;
+    }
+
+    const normalizedType = type.toLowerCase();
+    if (
+      normalizedType === "novnc.viewport.request" ||
+      normalizedType === "novnc.viewport.requestsync" ||
+      normalizedType === "novnc.viewport.ready" ||
+      normalizedType === "novnc.ready"
+    ) {
+      let handled = false;
+      for (const controller of noVncControllers) {
+        if (!controller) continue;
+        if (!event.source || controller.matchesWindow(event.source as Window)) {
+          controller.markReady?.();
+          controller.requestSync();
+          handled = true;
+        }
+      }
+      if (!handled) {
+        for (const controller of noVncControllers) {
+          controller?.markReady?.();
+          controller?.requestSync();
+        }
+      }
+      return;
+    }
+
+    if (
+      normalizedType === "novnc.viewport.reload" || normalizedType === "novnc.reload"
+    ) {
+      for (const controller of noVncControllers) {
+        if (!controller) continue;
+        if (!event.source || controller.matchesWindow(event.source as Window)) {
+          controller.reload();
+        }
+      }
+    }
+  });
+}
+
+export function initLayout() {
+  if (initialized) return;
+  initialized = true;
+
+  layoutEl = $(".layout");
+  sidebarEl = $(".sidebar");
+  sidebarToggle = $(".sidebar-toggle");
+
+  views = {
+    general: $("#view-general"),
+    browser: $("#view-browser"),
+    iot: $("#view-iot"),
+    chat: $("#view-chat"),
+    schedule: $("#view-schedule"),
+  };
+
+  appTitle = $("#appTitle");
+  navButtons = $$(".nav-btn") as HTMLButtonElement[];
+  sidebarChatTitle = $(".sidebar-chat-title");
+  sidebarChatIcon = $(".sidebar-chat-icon");
+  sidebarChatTitleTextNode = sidebarChatTitle
+    ? Array.from(sidebarChatTitle.childNodes).find(
+        (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
+      ) || null
+    : null;
+
+  generalDefaultContent = $("#generalDefaultContent");
+  generalProxyStatus = $("#generalProxyStatus");
+  generalProxyContainer = $("#generalProxyContainer");
+  generalViewPanel = views.general?.querySelector(".general-view") ?? null;
+
+  initAgentResultHosts();
+  bindNavButtons();
+  bindSidebarToggle();
+
+  const browserStage = $("#browserStage") as HTMLElement | null;
+  const browserFullscreenBtn = $("#fullscreenBtn") as HTMLButtonElement | null;
+  mainBrowserController = createNoVncController({
+    stage: browserStage,
+    fullscreenButton: browserFullscreenBtn,
+    context: "browser-view",
+  });
+
+  if (mainBrowserController) {
+    mainBrowserController.ensureIframe();
+  }
+
+  bindNoVncWindowMessages();
+}
+
+export function ensureGeneralProxyView(viewKey: ViewKey | null) {
+  if (!viewKey) return;
+  moveViewToGeneral(viewKey);
+}
+
+export function setCurrentViewKey(viewKey: ViewKey) {
+  currentViewKey = viewKey;
+}
+
+export function requestGeneralBrowserSync() {
+  requestGeneralBrowserViewportSync({ reloadFallback: false });
+}
+
+export function updateProxyViewForAgent(agentKey: string | null) {
+  if (agentKey) {
+    const view = resolveAgentToView(agentKey);
+    if (view) {
+      moveViewToGeneral(view);
+    }
   }
 }

@@ -80,29 +80,7 @@
   </style>
 </head>
 <body>
-  <div class="memory-container">
-    <h1>Memory Management</h1>
-    <div class="subtitle">短期・長期記憶を「自然言語」で編集できます。JSONは不要です。</div>
-    <div class="memory-note">
-      推奨カテゴリは「プロフィール / 好み・嗜好 / 健康 / 仕事・学業 / 趣味 / 人間関係 / 生活 / 旅行 / 食事 / その他」です。
-      JSONなどで直接編集する場合も、上記ラベルを使用するとUIとオーケストレーター双方で確実に参照されます。
-      それ以外のカテゴリを入力した場合は、自動的に追加カテゴリとして扱われます。
-    </div>
-    <form id="memoryForm" class="memory-form">
-      <div>
-        <div class="section-title">長期記憶（永続・変わりにくい事実）</div>
-        <div id="longTermSections" class="memory-grid"></div>
-      </div>
-      <div>
-        <div class="section-title">短期記憶（直近のコンテキスト・保留事項）</div>
-        <div id="shortTermSections" class="memory-grid"></div>
-      </div>
-      <div class="save-bar">
-        <p id="statusMessage" class="status"></p>
-        <button type="submit" class="save-button">保存する</button>
-      </div>
-    </form>
-  </div>
-  <script src="/assets/memory.js" defer></script>
+  <div id="memory-root"></div>
+  <script type="module" src="/assets/memory.js"></script>
 </body>
 </html>

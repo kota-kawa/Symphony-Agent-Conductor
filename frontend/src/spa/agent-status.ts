@@ -1,15 +1,29 @@
-import { $ } from "./dom-utils.js";
+import { $ } from "./dom-utils";
 
-const banner = $("#agentStatusBanner");
+type AgentKey = "browser" | "lifestyle" | "iot" | "scheduler";
 
-const AGENT_LABELS = {
+type AgentStatusEntry = {
+  available: boolean | null;
+  enabled: boolean | null;
+  error: string | null;
+};
+
+type AgentStatusPayload = {
+  agents?: Record<string, { available?: boolean; enabled?: boolean; error?: string }>
+  checked_at?: string;
+};
+
+const AGENT_LABELS: Record<AgentKey, string> = {
   browser: "ブラウザエージェント",
   lifestyle: "Life-Style エージェント",
   iot: "IoT エージェント",
   scheduler: "Scheduler エージェント",
 };
 
-const state = {
+const state: {
+  agents: Record<AgentKey, AgentStatusEntry>;
+  checkedAt: string | null;
+} = {
   agents: {
     browser: { available: null, enabled: true, error: null },
     lifestyle: { available: null, enabled: true, error: null },
@@ -20,10 +34,11 @@ const state = {
 };
 
 function updateBanner() {
-  const settingsBanner = $("#settingsAgentStatusBanner");
-  const entries = Object.entries(state.agents);
+  const banner = $("#agentStatusBanner") as HTMLElement | null;
+  const settingsBanner = $("#settingsAgentStatusBanner") as HTMLElement | null;
+  const entries = Object.entries(state.agents) as [AgentKey, AgentStatusEntry][];
   const disconnected = entries.filter(([, info]) => info.enabled !== false && info.available === false);
-  
+
   if (!disconnected.length) {
     if (banner) {
       banner.hidden = true;
@@ -38,24 +53,22 @@ function updateBanner() {
 
   const names = disconnected.map(([key]) => AGENT_LABELS[key] || key);
   const message = `未接続: ${names.join(" / ")}。接続できているエージェントの機能のみ利用できます。`;
-  
-  // Top page banner: stay hidden as per user request
+
   if (banner) {
     banner.textContent = message;
-    banner.dataset.kind = "error";
+    (banner as HTMLElement).dataset.kind = "error";
     banner.hidden = true; // Force hidden
   }
 
-  // Settings modal status note: show this one
   if (settingsBanner) {
     settingsBanner.textContent = message;
     settingsBanner.hidden = false;
   }
 }
 
-function applyStatusPayload(payload) {
+function applyStatusPayload(payload: AgentStatusPayload) {
   const agents = payload?.agents && typeof payload.agents === "object" ? payload.agents : {};
-  Object.keys(state.agents).forEach((key) => {
+  (Object.keys(state.agents) as AgentKey[]).forEach((key) => {
     const entry = agents[key];
     if (!entry || typeof entry !== "object") return;
     state.agents[key] = {
@@ -68,14 +81,14 @@ function applyStatusPayload(payload) {
   updateBanner();
 }
 
-export async function refreshAgentStatus({ silent = false } = {}) {
+export async function refreshAgentStatus({ silent = false }: { silent?: boolean } = {}) {
   try {
     const res = await fetch("/api/agent_status", { method: "GET" });
     if (!res.ok) {
       if (!silent) console.warn("Failed to fetch agent status", res.status);
       return null;
     }
-    const data = await res.json();
+    const data = (await res.json()) as AgentStatusPayload;
     applyStatusPayload(data);
     return data;
   } catch (error) {
@@ -84,7 +97,7 @@ export async function refreshAgentStatus({ silent = false } = {}) {
   }
 }
 
-export function markAgentUnavailable(agent, message) {
+export function markAgentUnavailable(agent: AgentKey, message?: string) {
   if (!agent || !state.agents[agent]) return;
   state.agents[agent] = {
     ...state.agents[agent],
@@ -94,7 +107,7 @@ export function markAgentUnavailable(agent, message) {
   updateBanner();
 }
 
-export function markAgentAvailable(agent) {
+export function markAgentAvailable(agent: AgentKey) {
   if (!agent || !state.agents[agent]) return;
   state.agents[agent] = {
     ...state.agents[agent],
@@ -104,18 +117,18 @@ export function markAgentAvailable(agent) {
   updateBanner();
 }
 
-export function getAgentStatus(agent) {
+export function getAgentStatus(agent: AgentKey) {
   if (!agent) return null;
   return state.agents[agent] || null;
 }
 
-export function isAgentAvailable(agent) {
+export function isAgentAvailable(agent: AgentKey) {
   const entry = getAgentStatus(agent);
   if (!entry) return null;
   return entry.available;
 }
 
-export function applyAgentStatusPayload(payload) {
+export function applyAgentStatusPayload(payload: AgentStatusPayload) {
   if (!payload) return;
   applyStatusPayload(payload);
 }
