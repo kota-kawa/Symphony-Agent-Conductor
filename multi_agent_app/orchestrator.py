@@ -50,6 +50,7 @@ from .scheduler import _call_scheduler_agent_chat
 from .settings import load_agent_connections, resolve_llm_config, load_memory_settings
 from .memory_manager import MemoryManager, get_memory_llm
 from .agent_status import get_agent_availability
+from .prompt_guard import check_prompt_guard
 
 
 class TaskSpec(TypedDict):
@@ -2173,13 +2174,61 @@ class MultiAgentOrchestrator:
             "session_history": session_history,
         }
 
+        logged_history_texts: List[str] = []
+        guard_decision = await check_prompt_guard(user_input)
+        if guard_decision.get("violation"):
+            blocked_message = (
+                "申し訳ありませんが、そのリクエストはプロンプトインジェクションの可能性があるため処理できません。"
+                "目的や必要な結果を具体的に言い換えてください。"
+            )
+            state["plan_summary"] = blocked_message
+            state["tasks"] = []
+            state["executions"] = []
+            state["current_index"] = 0
+
+            plan_history_entry = self._plan_history_entry(state.get("plan_summary"), state["tasks"])
+            if plan_history_entry:
+                self._append_session_history_entry(state, "assistant", plan_history_entry)
+                if log_history:
+                    _append_to_chat_history("assistant", plan_history_entry, broadcast=True)
+                    logged_history_texts.append(plan_history_entry)
+
+            yield self._event_payload("plan", state)
+
+            assistant_messages = self._format_assistant_messages(blocked_message, [])
+            if log_history:
+                updated_messages = []
+                for message in assistant_messages:
+                    text = str(message.get("text") or "")
+                    if message.get("type") in ("plan", "status"):
+                        text = self._prepend_orchestrator_label(text)
+                    updated_messages.append({**message, "text": text})
+                assistant_messages = updated_messages
+
+            if log_history and not logged_history_texts:
+                for msg in assistant_messages:
+                    text = msg.get("text")
+                    if not isinstance(text, str) or not text.strip():
+                        continue
+                    _append_to_chat_history("assistant", text, broadcast=True)
+
+            session_history_for_memory = state.get("session_history") or []
+            if session_history_for_memory:
+                self._trigger_memory_consolidation(session_history_for_memory)
+
+            yield self._event_payload(
+                "complete",
+                state,
+                assistant_messages=assistant_messages,
+            )
+            return
+
         plan_state = await self._plan_node(state)
         state.update(plan_state)
         state["tasks"] = list(state.get("tasks") or [])
         state["executions"] = list(state.get("executions") or [])
         state["current_index"] = 0
 
-        logged_history_texts: List[str] = []
         plan_history_entry = self._plan_history_entry(state.get("plan_summary"), state["tasks"])
         if plan_history_entry:
             self._append_session_history_entry(state, "assistant", plan_history_entry)

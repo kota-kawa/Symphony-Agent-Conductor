@@ -42,9 +42,11 @@ def _iter_iot_agent_bases() -> list[str]:
     """Return configured IoT Agent base URLs in priority order."""
 
     configured = os.environ.get("IOT_AGENT_API_BASE", "")
+    legacy_configured = os.environ.get("IOT_AGENT_API_BASE_URL", "")
     candidates: list[str] = []
-    if configured:
-        candidates.extend(part.strip() for part in configured.split(","))
+    for value in (configured, legacy_configured):
+        if value:
+            candidates.extend(part.strip() for part in value.split(","))
     candidates.extend(DEFAULT_IOT_AGENT_BASES)
 
     deduped: list[str] = []

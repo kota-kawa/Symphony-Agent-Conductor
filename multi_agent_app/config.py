@@ -77,6 +77,13 @@ LIFESTYLE_TIMEOUT = float(os.environ.get("LIFESTYLE_AGENT_TIMEOUT", "120"))
 PUBLIC_IOT_AGENT_BASE = "https://iot-agent.project-kk.com"
 
 DEFAULT_IOT_AGENT_BASES = (
+    # Docker Compose service name (same network)
+    "http://iot-agent:5006",
+    # Host machine from inside a container (Docker Desktop / host-gateway)
+    "http://host.docker.internal:5006",
+    # Local processes on the same host (for non-container development)
+    "http://127.0.0.1:5006",
+    "http://localhost:5006",
     PUBLIC_IOT_AGENT_BASE,
 )
 IOT_AGENT_TIMEOUT = float(os.environ.get("IOT_AGENT_TIMEOUT", "60"))
@@ -121,6 +128,8 @@ BROWSER_AGENT_FINAL_NOTICE = "※ ブラウザエージェントの応答はこ�
 
 ORCHESTRATOR_MODEL = os.environ.get("ORCHESTRATOR_MODEL", "openai/gpt-oss-20b")
 ORCHESTRATOR_MAX_TASKS = int(os.environ.get("ORCHESTRATOR_MAX_TASKS", "5"))
+
+PROMPT_GUARD_TIMEOUT = float(_parse_timeout_env("PROMPT_GUARD_TIMEOUT", 6.0) or 6.0)
 
 
 def _resolve_browser_embed_url() -> str:

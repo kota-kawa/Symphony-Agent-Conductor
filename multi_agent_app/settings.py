@@ -24,6 +24,7 @@ DEFAULT_MODEL_SELECTIONS: Dict[str, Dict[str, str]] = {
     "iot": {"provider": "groq", "model": "openai/gpt-oss-20b", "base_url": ""},
     "scheduler": {"provider": "groq", "model": "openai/gpt-oss-20b", "base_url": ""},
     "memory": {"provider": "groq", "model": ORCHESTRATOR_MODEL, "base_url": ""},
+    "safeguard": {"provider": "groq", "model": "openai/gpt-oss-safeguard-20b", "base_url": ""},
 }
 
 DEFAULT_MEMORY_SETTINGS: Dict[str, Any] = {
@@ -76,6 +77,7 @@ LLM_PROVIDERS: Dict[str, Dict[str, Any]] = {
             {"id": "llama-3.3-70b-versatile", "label": "Llama 3.3 70B (Groq)"},
             {"id": "llama-3.1-8b-instant", "label": "Llama 3.1 8B (Groq)"},
             {"id": "openai/gpt-oss-20b", "label": "GPT-OSS 20B (Groq)"},
+            {"id": "openai/gpt-oss-safeguard-20b", "label": "GPT-OSS Safeguard 20B (Groq)"},
             {"id": "qwen/qwen3-32b", "label": "Qwen3 32B (Groq)"},
         ],
     },
