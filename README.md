@@ -10,6 +10,21 @@ This is the command center that orchestrates capable AI agents (Browser automati
 
 Just talk to it in chat, and the agents will work together! 🤖✨
 
+## UI Preview
+
+<p align="center">
+  <img src="assets/images/image1.png" alt="Symphony UI Preview" width="1100">
+</p>
+
+## 🎬 Demo Videos
+
+Click a thumbnail to open the video on YouTube.
+
+| [![Demo Video 1](https://img.youtube.com/vi/jia_T6hgYSU/hqdefault.jpg)](https://youtu.be/jia_T6hgYSU) | [![Demo Video 2](https://img.youtube.com/vi/1haaOgwXPLU/hqdefault.jpg)](https://youtu.be/1haaOgwXPLU) |
+| --- | --- |
+| Demo Video 1 | Demo Video 2 |
+
+
 ---
 
 ## ✨ What can it do?
@@ -85,6 +100,21 @@ Symphony Agent Conductor へようこそ！
 ここは、様々な能力を持ったAIエージェントたち（ブラウザ操作、IoT、スケジュール管理など）を指揮し、あなたの生活やタスクをサポートする司令塔です。
 
 チャットで話しかけるだけで、エージェントたちが連携して動いてくれます！ 🤖✨
+
+## UI プレビュー
+
+<p align="center">
+  <img src="assets/images/image1.png" alt="Symphony UI Preview" width="1100">
+</p>
+
+## 🎬 デモ動画
+
+サムネイルをクリックすると YouTube で動画が開きます。
+
+| [![デモ動画 1](https://img.youtube.com/vi/jia_T6hgYSU/hqdefault.jpg)](https://youtu.be/jia_T6hgYSU) | [![デモ動画 2](https://img.youtube.com/vi/1haaOgwXPLU/hqdefault.jpg)](https://youtu.be/1haaOgwXPLU) |
+| --- | --- |
+| デモ動画 1 | デモ動画 2 |
+
 
 ---
 
