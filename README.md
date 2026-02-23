@@ -1,4 +1,4 @@
-> 📖 A Japanese version is available at the bottom of this page.
+> 📖 日本語版はこのページの一番下にあります。
 
 # 🎵 Symphony Agent Conductor
 
