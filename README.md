@@ -1,8 +1,18 @@
+> 📖 A Japanese version is available at the bottom of this page.
+
 # 🎵 Symphony Agent Conductor
 
 <div align="center">
   <img src="assets/icons/Symphony Agent Conductor.png" width="800px">
   <p><strong>AI Agent Orchestra for You</strong></p>
+  <p>
+    <img src="https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white" alt="Python">
+    <img src="https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white" alt="FastAPI">
+    <img src="https://img.shields.io/badge/LangGraph-1C3C3C?style=flat&logo=langchain&logoColor=white" alt="LangGraph">
+    <img src="https://img.shields.io/badge/OpenAI-412991?style=flat&logo=openai&logoColor=white" alt="OpenAI">
+    <img src="https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white" alt="Docker">
+    <img src="https://img.shields.io/badge/Uvicorn-499848?style=flat&logo=gunicorn&logoColor=white" alt="Uvicorn">
+  </p>
 </div>
 
 Welcome to Symphony Agent Conductor!  
@@ -94,6 +104,14 @@ For detailed agent settings and development behind-the-scenes, please take a loo
 <div align="center">
   <img src="assets/icons/Symphony Agent Conductor.png" width="800px">
   <p><strong>あなたのためのAIエージェント・オーケストラ</strong></p>
+  <p>
+    <img src="https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white" alt="Python">
+    <img src="https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white" alt="FastAPI">
+    <img src="https://img.shields.io/badge/LangGraph-1C3C3C?style=flat&logo=langchain&logoColor=white" alt="LangGraph">
+    <img src="https://img.shields.io/badge/OpenAI-412991?style=flat&logo=openai&logoColor=white" alt="OpenAI">
+    <img src="https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white" alt="Docker">
+    <img src="https://img.shields.io/badge/Uvicorn-499848?style=flat&logo=gunicorn&logoColor=white" alt="Uvicorn">
+  </p>
 </div>
 
 Symphony Agent Conductor へようこそ！  
