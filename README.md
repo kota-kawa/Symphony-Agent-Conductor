@@ -28,11 +28,13 @@ Just talk to it in chat, and the agents will work together! 🤖✨
 
 ## 🎬 Demo Videos
 
+The Browser Agent fetches weather information, the Scheduler Agent saves a weather memo, and the IoT Agent displays it on the screen.
+
 Click a thumbnail to open the video on YouTube.
 
 | [![Demo Video 1](https://img.youtube.com/vi/jia_T6hgYSU/hqdefault.jpg)](https://youtu.be/jia_T6hgYSU) | [![Demo Video 2](https://img.youtube.com/vi/1haaOgwXPLU/hqdefault.jpg)](https://youtu.be/1haaOgwXPLU) |
 | --- | --- |
-| Demo Video 1 | Demo Video 2 |
+| What it actually looks like on screen | Agents in action |
 
 
 ---
@@ -127,11 +129,13 @@ Symphony Agent Conductor へようこそ！
 
 ## 🎬 デモ動画
 
+ブラウザエージェントで天気情報を取得した後、スケジューラーエージェントが天気の情報をメモに残し、IoTエージェントがスクリーンに表示する様子です。
+
 サムネイルをクリックすると YouTube で動画が開きます。
 
 | [![デモ動画 1](https://img.youtube.com/vi/jia_T6hgYSU/hqdefault.jpg)](https://youtu.be/jia_T6hgYSU) | [![デモ動画 2](https://img.youtube.com/vi/1haaOgwXPLU/hqdefault.jpg)](https://youtu.be/1haaOgwXPLU) |
 | --- | --- |
-| デモ動画 1 | デモ動画 2 |
+| 実際にスクリーンに表示される様子 | エージェントが動いている様子 |
 
 
 ---
