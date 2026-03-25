@@ -49,27 +49,60 @@ Click a thumbnail to open the video on YouTube.
 
 ## 🔬 Evaluation
 
-### Orchestrator Agent
+### Evaluation Scenarios
 
-**Role**
-The orchestrator decomposes ambiguous user requests into executable subtasks and coordinates five agent-level capabilities through a Plan–Execute–Review loop.
+10 scenarios were used, ranging from simple conversational responses to complex multi-agent coordination (web search + scheduling + IoT control).
 
-**Evaluation Protocol**
-I conducted scenario-based integrated evaluation under two conditions:
-1. **without memory**
-2. **with long-/short-term memory**
+| # | Task Overview | # Criteria |
+|---|---|:---:|
+| 1 | Respond to an abstract conversational message | 1 |
+| 2 | Look up weekly weather using stored location + log the result | 2 |
+| 3 | Find cheapest Tokyo→Atlanta weekday flight in Jan 2026 + add to calendar | 2 |
+| 4 | Look up moonrise direction & time + schedule "moonbathing" + turn off lights | 3 |
+| 5 | Check online evacuation manual + get shelter advice (Life-Style agent) + blink red LED | 3 |
+| 6 | Suggest dinner recipe (health/allergy-aware) + add to task list + display "complete" | 3 |
+| 7 | Find upcoming hobby-related events near user's location + schedule them | 3 |
+| 8 | Find nearby restaurant serving user's favorite food + save as memo + display store name | 3 |
+| 9 | Find picnic spot + get family planning advice + schedule for next Sunday + sound buzzer | 4 |
+| 10 | Recognize and execute the user's predefined daily routine | 3 |
 
-The evaluation metrics were:
-- subgoal achievement
-- number of clarification questions
-- browser step count
-- final scenario score
+### Results
 
-**Result**
-The memory-enabled orchestrator improved the task achievement score by approximately **1.7×** over the no-memory baseline, while also reducing unnecessary clarification turns. This suggests that explicit memory is effective not only for personalization, but also for execution efficiency in multi-agent planning.
+Memory-enabled conditions scored **~1.7× higher** than the no-memory baseline (max possible: 27 points).
 
-**Why this matters**
-This result shows that memory is not just a UX feature; it functions as a core systems component that improves end-to-end task completion.
+| Condition | Score |
+|---|:---:|
+| No Memory (Baseline) | 15 / 27 |
+| Persona 1 (with memory) | 24 / 27 |
+| Persona 2 (with memory) | 26 / 27 |
+| Persona 3 (with memory) | 25 / 27 |
+
+<details>
+<summary>Per-scenario breakdown</summary>
+
+| Scenario | Baseline | Persona 1 | Persona 2 | Persona 3 | Max |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| 1 | 1 | 1 | 1 | 1 | 1 |
+| 2 | 1 | 2 | 2 | 2 | 2 |
+| 3 | 0 | 0 | 2 | 2 | 2 |
+| 4 | 1 | 3 | 3 | 3 | 3 |
+| 5 | 3 | 3 | 3 | 2 | 3 |
+| 6 | 2 | 3 | 3 | 3 | 3 |
+| 7 | 1 | 2 | 2 | 2 | 3 |
+| 8 | 2 | 3 | 3 | 3 | 3 |
+| 9 | 3 | 4 | 4 | 4 | 4 |
+| 10 | 1 | 3 | 3 | 3 | 3 |
+| **Total** | **15** | **24** | **26** | **25** | **27** |
+
+</details>
+
+### Key Observations
+
+- **Memory dramatically improves ambiguous task handling** — stored user context (location, preferences, allergies, routines) enabled correct interpretation without needing to ask clarification.
+- **Without memory**, the agent resorted to general assumptions or asked clarification questions (e.g., defaulted to Tokyo when location was unspecified).
+- **Browser step count was not reduced by memory** — instead, memory caused more *verification steps* (checking details against user preferences). This is the desired behavior: higher output quality over raw speed.
+- **Date interpretation can be inconsistent** — the Browser Agent occasionally searched 2024 data instead of 2025 due to the model's knowledge cutoff. Passing an explicit year in the prompt resolves this.
+- **Scenario 3 (flight search)** consistently struggled with date-picker UIs on booking sites.
 
 ---
 
@@ -176,27 +209,60 @@ Symphony Agent Conductor へようこそ！
 
 ## 🔬 評価
 
-### オーケストレーターエージェント
+### 評価シナリオ
 
-**役割**
-オーケストレーターは、曖昧なユーザーリクエストを実行可能なサブタスクに分解し、Plan–Execute–Review ループを通じて5つのエージェントレベルの機能を調整します。
+シンプルな会話応答から，複数エージェントの連携（Web検索・スケジュール・IoT制御）を必要とする複雑なタスクまで，10種類のシナリオで評価しました．
 
-**評価プロトコル**
-2つの条件下でシナリオベースの統合評価を実施しました：
-1. **メモリなし**
-2. **長期・短期メモリあり**
+| # | タスク概要 | 基準数 |
+|---|---|:---:|
+| 1 | 抽象的な発話への適切な返答 | 1 |
+| 2 | メモリから居住地を特定し，週間天気を検索・記録 | 2 |
+| 3 | 2026年1月の東京→アトランタ最安値便を検索し，カレンダーに登録 | 2 |
+| 4 | 月の出の方角・時間を調査し，「月光浴」の予定登録→照明消灯 | 3 |
+| 5 | 避難マニュアル確認→Life-Styleエージェントで助言取得→赤色LED点滅 | 3 |
+| 6 | 健康・アレルギー配慮の夕飯レシピ提案→タスク追加→"complete"表示 | 3 |
+| 7 | ユーザーの趣味に関連する近隣イベントを検索→スケジュール登録 | 3 |
+| 8 | 好きな食べ物の近隣店舗を検索→メモ保存→店名をディスプレイ表示 | 3 |
+| 9 | ピクニックスポット調査→家族会議の進め方助言→来週日曜に予定登録→ブザー鳴動 | 4 |
+| 10 | ユーザー定義のルーティンを認識して順次実行 | 3 |
 
-評価指標は以下の通りです：
-- サブゴール達成度
-- 確認質問の数
-- ブラウザのステップ数
-- 最終シナリオスコア
+### 評価結果
 
-**結果**
-メモリ有効化されたオーケストレーターは、メモリなしのベースラインと比較してタスク達成スコアを約 **1.7倍** 改善し、不要な確認ターンも削減しました。これは、明示的なメモリがパーソナライゼーションだけでなく、マルチエージェント計画の実行効率にも効果的であることを示唆しています。
+メモリ機能を有効にすることで，ベースラインと比較してスコアが約 **1.7倍** 向上しました（最高スコア：27点）．
 
-**この結果が重要な理由**
-この結果は、メモリが単なる UX 機能ではなく、エンドツーエンドのタスク完了を改善するコアシステムコンポーネントとして機能することを示しています。
+| 評価対象 | スコア |
+|---|:---:|
+| メモリなし（ベースライン） | 15 / 27 |
+| ペルソナ1（メモリあり） | 24 / 27 |
+| ペルソナ2（メモリあり） | 26 / 27 |
+| ペルソナ3（メモリあり） | 25 / 27 |
+
+<details>
+<summary>シナリオ別スコア内訳</summary>
+
+| シナリオ | ベースライン | ペルソナ1 | ペルソナ2 | ペルソナ3 | 最大 |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| 1 | 1 | 1 | 1 | 1 | 1 |
+| 2 | 1 | 2 | 2 | 2 | 2 |
+| 3 | 0 | 0 | 2 | 2 | 2 |
+| 4 | 1 | 3 | 3 | 3 | 3 |
+| 5 | 3 | 3 | 3 | 2 | 3 |
+| 6 | 2 | 3 | 3 | 3 | 3 |
+| 7 | 1 | 2 | 2 | 2 | 3 |
+| 8 | 2 | 3 | 3 | 3 | 3 |
+| 9 | 3 | 4 | 4 | 4 | 4 |
+| 10 | 1 | 3 | 3 | 3 | 3 |
+| **合計** | **15** | **24** | **26** | **25** | **27** |
+
+</details>
+
+### 考察
+
+- **メモリにより曖昧な指示の解釈精度が向上** — 居住地・好み・アレルギー・ルーティンなどをメモリから参照することで，追加質問なしに適切な行動を選択できました．
+- **メモリなしの場合**，エージェントは一般的な前提（例：場所未指定なら東京と解釈）で動作したり，確認質問を行う場面がありました．
+- **ブラウザのステップ数はメモリの有無で有意差なし** — ただしメモリありの場合，詳細ページの確認など「検証的なステップ」が増加しました．これはスピードより出力品質を優先する望ましい挙動です．
+- **日時解釈の一貫性に課題あり** — モデルの知識カットオフの影響で，2025年の検索をすべき場面で2024年の情報を取得するケースがありました．プロンプトに年を明示することで回避できます．
+- **シナリオ3（航空券検索）** は，予約サイトの日付選択UIの操作に継続的に失敗しました．
 
 ---
 
