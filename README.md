@@ -47,6 +47,32 @@ Click a thumbnail to open the video on YouTube.
 *   📅 **Schedule Management**: Leave schedule adjustments and confirmations to us.
 *   🧠 **Memory**: Remembers conversation contents and your preferences, getting smarter over time.
 
+## 🔬 Evaluation
+
+### Orchestrator Agent
+
+**Role**
+The orchestrator decomposes ambiguous user requests into executable subtasks and coordinates five agent-level capabilities through a Plan–Execute–Review loop.
+
+**Evaluation Protocol**
+I conducted scenario-based integrated evaluation under two conditions:
+1. **without memory**
+2. **with long-/short-term memory**
+
+The evaluation metrics were:
+- subgoal achievement
+- number of clarification questions
+- browser step count
+- final scenario score
+
+**Result**
+The memory-enabled orchestrator improved the task achievement score by approximately **1.7×** over the no-memory baseline, while also reducing unnecessary clarification turns. This suggests that explicit memory is effective not only for personalization, but also for execution efficiency in multi-agent planning.
+
+**Why this matters**
+This result shows that memory is not just a UX feature; it functions as a core systems component that improves end-to-end task completion.
+
+---
+
 ## 🚀 Get Started (Docker Compose)
 
 If you have Docker, the concert (system) starts with a single command! 🎼
@@ -147,6 +173,32 @@ Symphony Agent Conductor へようこそ！
 *   🏠 **スマートホーム (IoT)**: 家電の操作や部屋の環境（温度など）の確認ができます。
 *   📅 **スケジュール管理**: 予定の調整や確認もお任せあれ。
 *   🧠 **記憶**: 会話の内容やあなたの好みを覚えて、どんどん賢くなります。
+
+## 🔬 評価
+
+### オーケストレーターエージェント
+
+**役割**
+オーケストレーターは、曖昧なユーザーリクエストを実行可能なサブタスクに分解し、Plan–Execute–Review ループを通じて5つのエージェントレベルの機能を調整します。
+
+**評価プロトコル**
+2つの条件下でシナリオベースの統合評価を実施しました：
+1. **メモリなし**
+2. **長期・短期メモリあり**
+
+評価指標は以下の通りです：
+- サブゴール達成度
+- 確認質問の数
+- ブラウザのステップ数
+- 最終シナリオスコア
+
+**結果**
+メモリ有効化されたオーケストレーターは、メモリなしのベースラインと比較してタスク達成スコアを約 **1.7倍** 改善し、不要な確認ターンも削減しました。これは、明示的なメモリがパーソナライゼーションだけでなく、マルチエージェント計画の実行効率にも効果的であることを示唆しています。
+
+**この結果が重要な理由**
+この結果は、メモリが単なる UX 機能ではなく、エンドツーエンドのタスク完了を改善するコアシステムコンポーネントとして機能することを示しています。
+
+---
 
 ## 🚀 すぐに始める (Docker Compose)
 
