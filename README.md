@@ -47,7 +47,74 @@ Click a thumbnail to open the video on YouTube.
 *   📅 **Schedule Management**: Leave schedule adjustments and confirmations to us.
 *   🧠 **Memory**: Remembers conversation contents and your preferences, getting smarter over time.
 
+---
+
+## 🏗️ System Architecture
+
+```mermaid
+flowchart TD
+    User["👤 User"] -->|Natural language| Frontend["Frontend SPA\n(React / TypeScript)"]
+    Frontend -->|HTTP / SSE| Backend["FastAPI Backend"]
+
+    subgraph ORCH["Orchestrator (LangGraph + LangChain)"]
+        direction LR
+        P[Plan] --> E[Execute] --> R[Review]
+        R -->|Retry if needed| P
+    end
+
+    Backend --> P
+
+    subgraph MEM["Memory (Orchestrator-managed)"]
+        LM["Long-term Memory\nAddress · Hobbies · Health"]
+        SM["Short-term Memory\nRecent Context (TTL: 45 min)"]
+    end
+
+    P <-->|Context lookup| MEM
+
+    E -->|MCP| BA["🌐 Browser Agent\n(browser-use)"]
+    E -->|MCP| IoT["🏠 IoT Agent\n(MicroPython + llama-cpp)"]
+    E -->|MCP| LA["💡 Life-Style Agent\n(FAISS + multilingual-e5)"]
+    E -->|MCP| SA["📅 Scheduler Agent\n(SQLAlchemy)"]
+
+    BA -->|SSE stream| Backend
+```
+
+---
+
+## 🛠️ Technical Design
+
+### What I Built
+
+This project was designed and implemented from scratch, including:
+
+- **Orchestrator**: A LangGraph-based state machine with three nodes — `plan`, `execute`, and `review` — that iterates through task lists and retries up to twice on failure. The Conductor dynamically routes tasks to the appropriate agent based on natural language intent.
+- **Memory System**: A dual-layer architecture where short-term memory (TTL: 45 min) automatically promotes high-importance entries to long-term storage, enabling personalization across sessions without context bloat.
+- **Agent Bridges**: Concurrent SSE streaming from the Browser Agent — simultaneously opening `/api/stream` (event stream) and `/api/chat` (task execution) and merging their outputs into a unified real-time feed.
+- **IoT Integration**: MCP-based device control that resolves tool schemas dynamically at runtime, without hardcoding device capabilities.
+- **Frontend SPA**: A single-page application with an orchestrator sidebar, live agent status display, and a memory editor (currently migrating to React / TypeScript).
+
+### Technology Choices
+
+| Technology | Where used | Why |
+|---|---|---|
+| **LangGraph** | Orchestrator | Graph-based state machine naturally models the plan → execute → review cycle and supports conditional retry edges without custom loop logic |
+| **MCP** (Model Context Protocol) | Orchestrator ↔ Agents | Standardizes the interface for calling heterogeneous agents, making the system extensible — new agents can be added without changing orchestrator logic |
+| **FastAPI** | Backend | Native async/await and SSE support are essential for streaming multi-agent progress in real time |
+| **Docker Compose** | Deployment | Agents run as independent services, enabling composable deployment and independent scaling |
+| **Dual-layer Memory (JSON)** | Orchestrator | Separating short-term (session-scoped) and long-term (persistent) memory with semantic diffing prevents duplicates and unbounded context growth |
+
+---
+
 ## 🔬 Evaluation
+
+### Evaluation Method
+
+Each scenario defines multiple sub-goals (criteria). Each criterion is scored as pass (○) or fail (×). The final score penalizes the agent for asking clarification questions:
+
+> **Score = max(0, G − Q)**
+> G = number of criteria achieved, Q = number of clarification questions asked to the user
+
+This treats user burden (being interrupted by questions) as a deduction, rewarding agents that resolve ambiguity through memory rather than asking. Evaluation was conducted manually by the developer, comparing a no-memory baseline against three user personas with memory enabled.
 
 ### Evaluation Scenarios
 
@@ -103,6 +170,18 @@ Memory-enabled conditions scored **~1.7× higher** than the no-memory baseline (
 - **Browser step count was not reduced by memory** — instead, memory caused more *verification steps* (checking details against user preferences). This is the desired behavior: higher output quality over raw speed.
 - **Date interpretation can be inconsistent** — the Browser Agent occasionally searched 2024 data instead of 2025 due to the model's knowledge cutoff. Passing an explicit year in the prompt resolves this.
 - **Scenario 3 (flight search)** consistently struggled with date-picker UIs on booking sites.
+
+---
+
+## ⚡ Technical Challenges
+
+| Challenge | How It Was Addressed |
+|---|---|
+| **Real-time multi-agent streaming** | Browser Agent required opening two concurrent connections — an event stream and a task execution request — and merging them into a single SSE feed for the frontend. Handled via `asyncio` and a shared progress-tracking state. |
+| **Memory promotion logic** | Designed an importance/score-based algorithm to selectively promote short-term entries to long-term storage at TTL expiry, preventing both memory loss and unbounded growth. |
+| **LLM date interpretation** | Model knowledge cutoff caused the Browser Agent to fetch 2024 data when 2025 results were needed. Resolved by explicitly injecting the current year into task prompts. |
+| **Browser date-picker automation** | Flight booking sites (Scenario 3) consistently defeated automation due to JavaScript-heavy calendar widgets. Documented as a known limitation; requires specialized UI interaction strategies. |
+| **Ambiguous instruction handling** | Without memory, the orchestrator defaulted to general assumptions (e.g., Tokyo as a fallback location). Memory-backed planning at the `plan` node eliminated clarification questions entirely. |
 
 ---
 
@@ -207,7 +286,74 @@ Symphony Agent Conductor へようこそ！
 *   📅 **スケジュール管理**: 予定の調整や確認もお任せあれ。
 *   🧠 **記憶**: 会話の内容やあなたの好みを覚えて、どんどん賢くなります。
 
+---
+
+## 🏗️ システムアーキテクチャ
+
+```mermaid
+flowchart TD
+    User["👤 ユーザー"] -->|自然言語| Frontend["フロントエンド SPA\n(React / TypeScript)"]
+    Frontend -->|HTTP / SSE| Backend["FastAPI バックエンド"]
+
+    subgraph ORCH["Orchestrator (LangGraph + LangChain)"]
+        direction LR
+        P[Plan] --> E[Execute] --> R[Review]
+        R -->|必要に応じてリトライ| P
+    end
+
+    Backend --> P
+
+    subgraph MEM["メモリ (Orchestratorが管理)"]
+        LM["長期メモリ\n住所・趣味・健康状態"]
+        SM["短期メモリ\n直近のコンテキスト (TTL: 45分)"]
+    end
+
+    P <-->|コンテキスト参照| MEM
+
+    E -->|MCP| BA["🌐 Browser Agent\n(browser-use)"]
+    E -->|MCP| IoT["🏠 IoT Agent\n(MicroPython + llama-cpp)"]
+    E -->|MCP| LA["💡 Life-Style Agent\n(FAISS + multilingual-e5)"]
+    E -->|MCP| SA["📅 Scheduler Agent\n(SQLAlchemy)"]
+
+    BA -->|SSE ストリーム| Backend
+```
+
+---
+
+## 🛠️ 技術設計
+
+### 設計・実装した主な要素
+
+本プロジェクトは以下をゼロから設計・実装しました。
+
+- **オーケストレーター**: `plan`・`execute`・`review` の3ノードからなる LangGraph ベースのステートマシン。最大2回のリトライ付きでタスクリストを反復処理し、自然言語の意図に基づいて適切なエージェントへ動的にルーティングします。
+- **メモリシステム**: 短期メモリ（TTL: 45分）から重要度の高いエントリを長期メモリへ自動昇格させる2層アーキテクチャ。セッションをまたいだパーソナライズをコンテキスト肥大化なしに実現します。
+- **エージェントブリッジ**: ブラウザエージェントとの並行 SSE ストリーミング（`/api/stream` と `/api/chat` を同時接続し、進捗をリアルタイムで中継）。
+- **IoT 連携**: MCP ベースのデバイス制御により、デバイス能力をハードコードせずランタイムでツールスキーマを動的解決します。
+- **フロントエンド SPA**: オーケストレーターサイドバー・ライブエージェントステータス・メモリエディタを備えたシングルページアプリケーション（React / TypeScript 移行中）。
+
+### 技術選定の理由
+
+| 技術 | 使用箇所 | 選定理由 |
+|---|---|---|
+| **LangGraph** | Orchestrator | グラフ型ステートマシンが plan → execute → review サイクルと条件付きリトライに自然にフィット。カスタムループ不要。 |
+| **MCP**（Model Context Protocol） | Orchestrator ↔ 各エージェント | 異種エージェントの呼び出しインターフェースを標準化し、新エージェントをオーケストレーター側の変更なしに追加可能にする。 |
+| **FastAPI** | バックエンド | ネイティブな async/await と SSE サポートが、マルチエージェントの進捗リアルタイム配信に必須。 |
+| **Docker Compose** | デプロイ | エージェントを独立サービスとして分離し、コンポーザブルなデプロイと個別スケーリングを実現。 |
+| **2層メモリ（JSON）** | Orchestrator | 短期（セッション）と長期（永続）を分離し、セマンティック差分更新で重複を防ぎつつコンテキスト肥大化を回避。 |
+
+---
+
 ## 🔬 評価
+
+### 評価方法
+
+各シナリオに複数のサブゴール（基準）を設定し、各基準を達成（○）または未達成（×）で評価します。スコアは確認質問の回数をペナルティとして差し引きます：
+
+> **スコア = max(0, G − Q)**
+> G = 達成した基準の数、Q = ユーザーへの確認質問回数
+
+これにより、曖昧な指示を質問で解消するのではなく、メモリを使って自律的に補完できるエージェントほど高いスコアを得られます。評価は開発者が事前に定義した基準に従い手動で実施し、メモリなしのベースラインとメモリ有りの3ペルソナを比較しました。
 
 ### 評価シナリオ
 
@@ -263,6 +409,18 @@ Symphony Agent Conductor へようこそ！
 - **ブラウザのステップ数はメモリの有無で有意差なし** — ただしメモリありの場合，詳細ページの確認など「検証的なステップ」が増加しました．これはスピードより出力品質を優先する望ましい挙動です．
 - **日時解釈の一貫性に課題あり** — モデルの知識カットオフの影響で，2025年の検索をすべき場面で2024年の情報を取得するケースがありました．プロンプトに年を明示することで回避できます．
 - **シナリオ3（航空券検索）** は，予約サイトの日付選択UIの操作に継続的に失敗しました．
+
+---
+
+## ⚡ 技術的な課題と対応
+
+| 課題 | 対応内容 |
+|---|---|
+| **マルチエージェントのリアルタイムストリーミング** | ブラウザエージェントとの2本の並行接続（イベントストリームとタスクリクエスト）を `asyncio` と共有進捗ステートで統合し、単一の SSE フィードとしてフロントエンドへ中継。 |
+| **メモリ昇格ロジックの設計** | TTL 切れ時に重要度・スコアで短期メモリから長期メモリへ選択的に昇格させ、メモリ消失と無制限な肥大化の両方を防止するアルゴリズムを設計・実装。 |
+| **LLM の日時解釈ずれ** | モデルの知識カットオフで2025年検索が2024年になる問題が発生。プロンプトへの年の明示により解決。 |
+| **UI 日付選択の自動化** | 予約サイト（シナリオ3）の JavaScript 重厚なカレンダーUIへの操作が継続的に失敗。専門的な UI 操作戦略が必要な既知の課題として記録。 |
+| **曖昧な指示のハンドリング** | メモリなしではオーケストレーターが東京などの一般的な前提で動作。`plan` ノードでのメモリ参照を組み込むことで確認質問を排除し、精度を向上。 |
 
 ---
 
