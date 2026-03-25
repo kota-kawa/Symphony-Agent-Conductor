@@ -51,6 +51,8 @@ Click a thumbnail to open the video on YouTube.
 
 ## 🏗️ System Architecture
 
+![Symphony Agent Conductor Architecture](assets/images/symphony-agent-conductor-architecture.png)
+
 ```mermaid
 flowchart TD
     User["👤 User"] -->|Natural language| Frontend["Frontend SPA\n(React / TypeScript)"]
@@ -289,6 +291,8 @@ Symphony Agent Conductor へようこそ！
 ---
 
 ## 🏗️ システムアーキテクチャ
+
+![Symphony Agent Conductor Architecture](assets/images/symphony-agent-conductor-architecture.png)
 
 ```mermaid
 flowchart TD
