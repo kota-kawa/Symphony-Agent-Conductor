@@ -83,6 +83,19 @@ flowchart TD
 
 ---
 
+## 🔗 Related Agent Repositories
+
+Symphony Agent Conductor orchestrates the following specialized agents:
+
+| Agent | Repository | Description |
+|---|---|---|
+| 🌐 Browser Agent | [kota-kawa/Browser-Agent](https://github.com/kota-kawa/Browser-Agent) | LLM-powered browser automation with FastAPI backend and noVNC web interface |
+| 🏠 IoT Agent | [kota-kawa/IoT-Agent](https://github.com/kota-kawa/IoT-Agent) | Conversational IoT control platform for Jetson, Raspberry Pi, and Pico W |
+| 💡 Life-Style Agent | [kota-kawa/Life-Style-Agent](https://github.com/kota-kawa/Life-Style-Agent) | RAG-powered lifestyle assistant with MCP support and conversation analysis |
+| 📅 Scheduler Agent | [kota-kawa/Scheduler-Agent](https://github.com/kota-kawa/Scheduler-Agent) | Chat-first scheduling assistant supporting OpenAI, Gemini, and Anthropic models |
+
+---
+
 ## 🛠️ Technical Design
 
 ### What I Built
@@ -321,6 +334,19 @@ flowchart TD
 
     BA -->|SSE ストリーム| Backend
 ```
+
+---
+
+## 🔗 関連エージェントリポジトリ
+
+Symphony Agent Conductor は以下の専門エージェントを連携・指揮します：
+
+| エージェント | リポジトリ | 説明 |
+|---|---|---|
+| 🌐 Browser Agent | [kota-kawa/Browser-Agent](https://github.com/kota-kawa/Browser-Agent) | FastAPI バックエンドと noVNC Web UI を備えた LLM 駆動ブラウザ自動化エージェント |
+| 🏠 IoT Agent | [kota-kawa/IoT-Agent](https://github.com/kota-kawa/IoT-Agent) | Jetson・Raspberry Pi・Pico W に対応した会話型 IoT 制御プラットフォーム |
+| 💡 Life-Style Agent | [kota-kawa/Life-Style-Agent](https://github.com/kota-kawa/Life-Style-Agent) | MCP サポートと会話分析機能を備えた RAG 駆動ライフスタイルアシスタント |
+| 📅 Scheduler Agent | [kota-kawa/Scheduler-Agent](https://github.com/kota-kawa/Scheduler-Agent) | OpenAI・Gemini・Anthropic モデルに対応したチャット型スケジュール管理エージェント |
 
 ---
 
